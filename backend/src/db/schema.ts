@@ -1,4 +1,4 @@
-const {integer, text, sqliteTable} = require("drizzle-orm/sqlite-core");
+const {integer, float, text, sqliteTable} = require("drizzle-orm/sqlite-core");
 //USER TABLE
 const userTable = sqliteTable("users", {
     id: integer("id").primaryKey(),
@@ -42,6 +42,6 @@ const paymentMethodTable = sqliteTable("payment_method", {
 const installmentsTable = sqliteTable("installments", {
     id: integer("id").primaryKey(),
     inInstallments: integer("in_installments").notNull(),
-    percentage: integer("percentage").notNull()
+    percentage: float("percentage").notNull()
 });
 module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable, installmentsTable }
