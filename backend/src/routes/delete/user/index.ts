@@ -1,18 +1,29 @@
 import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
-const bcrypt = require("bcrypt");
 
 async function users(fastify: FastifyInstance) {
+
     fastify.delete("/user/:id",
         {
-            onRequest: [fastify.authenticate]
+            onRequest: [
+                fastify.authenticate,
+                fastify.authorize(3)
+            ]
         },
         async (request, reply) => {
 
             const { id } = request.params as {
                 id: string;
             };
+
+            // Impede o usuário de excluir a própria conta
+
+            if (Number(id) === request.user.id) {
+                return reply.code(403).send({
+                    message: "You cannot delete your own user"
+                });
+            }
 
             const user = sqlite
                 .prepare(`
@@ -28,6 +39,17 @@ async function users(fastify: FastifyInstance) {
                 });
             }
 
+            // Remove as relações do usuário com as roles
+
+            sqlite
+                .prepare(`
+                    DELETE FROM roles_user
+                    WHERE user_id = ?
+                `)
+                .run(id);
+
+            // Remove o usuário
+
             sqlite
                 .prepare(`
                     DELETE FROM users
@@ -41,4 +63,5 @@ async function users(fastify: FastifyInstance) {
         }
     );
 }
+
 module.exports = users;

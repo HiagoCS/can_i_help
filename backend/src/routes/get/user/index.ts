@@ -8,13 +8,39 @@ async function users(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async () => {
+
             const users = sqlite
-                .prepare(`SELECT * FROM users`)
+                .prepare(`
+                    SELECT id, email, avatar
+                    FROM users
+                `)
                 .all();
+
+            const getRoles = sqlite.prepare(`
+                SELECT
+                    r.id,
+                    r.name,
+                    r.level
+                FROM roles_user ru
+                INNER JOIN roles r
+                    ON r.id = ru.role_id
+                WHERE ru.user_id = ?
+            `);
+
+            const data = users.map((user: any) => {
+
+                const roles = getRoles.all(user.id);
+
+                return {
+                    ...user,
+                    roles
+                };
+
+            });
 
             return {
                 message: "Successful Request",
-                data: users
+                data
             };
         }
     );
@@ -24,6 +50,7 @@ async function users(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async (request) => {
+
             const { id } = request.user as {
                 id: number;
                 email: string;
@@ -31,21 +58,41 @@ async function users(fastify: FastifyInstance) {
 
             const user = sqlite
                 .prepare(`
-                SELECT id, email, avatar
-                FROM users
-                WHERE id = ?
-            `)
+                    SELECT id, email, avatar
+                    FROM users
+                    WHERE id = ?
+                `)
                 .get(id);
+
+            const roles = sqlite
+                .prepare(`
+                    SELECT
+                        r.id,
+                        r.name,
+                        r.level
+                    FROM roles_user ru
+                    INNER JOIN roles r
+                        ON r.id = ru.role_id
+                    WHERE ru.user_id = ?
+                `)
+                .all(id);
 
             return {
                 message: "Successful Request",
-                data: user
+                data: {
+                    ...user,
+                    roles
+                }
             };
         }
     );
+
     fastify.get("/user/:id",
         {
-            onRequest: [fastify.authenticate]
+            onRequest: [
+                fastify.authenticate,
+                fastify.authorize(3)
+            ]
         },
         async (request, reply) => {
 
@@ -67,9 +114,25 @@ async function users(fastify: FastifyInstance) {
                 });
             }
 
+            const roles = sqlite
+                .prepare(`
+                    SELECT
+                        r.id,
+                        r.name,
+                        r.level
+                    FROM roles_user ru
+                    INNER JOIN roles r
+                        ON r.id = ru.role_id
+                    WHERE ru.user_id = ?
+                `)
+                .all(id);
+
             return {
                 message: "Successful Request",
-                data: user
+                data: {
+                    ...user,
+                    roles
+                }
             };
         }
     );
