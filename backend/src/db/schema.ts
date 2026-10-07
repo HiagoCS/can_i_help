@@ -44,4 +44,11 @@ const installmentsTable = sqliteTable("installments", {
     inInstallments: integer("in_installments").notNull(),
     percentage: real("percentage").notNull()
 });
-module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable, installmentsTable }
+//CLIENTS
+const clientsTable = sqliteTable("clients", {
+    id: integer("id").primaryKey(),
+    name: text("name").notNull(),
+    cpf: text("cpf").unique(),
+    methodId: integer("method_id").notNull().references(() => paymentMethodTable.id)
+});
+module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable, installmentsTable, clientsTable }
