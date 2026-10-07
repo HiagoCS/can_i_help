@@ -4,13 +4,15 @@ const userTable = sqliteTable("users", {
     id: integer("id").primaryKey(),
     email: text("email").unique().notNull(),
     password: text("password").notNull(),
-    avatar: text("avatar")
+    avatar: text("avatar"),
+    status: integer("status",{mode:"boolean"}).notNull()
 });
 //ROLES TABLE
 const rolesTable = sqliteTable("roles", {
     id: integer("id").primaryKey(),
     name: text("name").unique().notNull(),
-    level: integer("level").notNull()
+    level: integer("level").notNull(),
+    status: integer("status",{mode:"boolean"}).notNull()
 });
 //ROLES TO USER TABLE
 const rolesUserTable = sqliteTable("roles_user", {
@@ -30,4 +32,10 @@ const productsTable = sqliteTable("products", {
     amount: text("amount").default("0"),
     status: integer("status",{mode:"boolean"}).notNull()
 });
-module.exports = { userTable, rolesTable, rolesUserTable, productsTable }
+//PAYMENT METHODS TABLE
+const paymentMethodTable = sqliteTable("payment_method", {
+    id: integer("id").primaryKey(),
+    name: text("name").unique().notNull(),
+    status: integer("status",{mode:"boolean"}).notNull()
+});
+module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable }
