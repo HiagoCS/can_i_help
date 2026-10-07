@@ -6,4 +6,16 @@ const userTable = sqliteTable("users", {
     password: text("password").notNull(),
     avatar: text("avatar")
 });
-module.exports = { userTable }
+//ROLES TABLE
+const rolesTable = sqliteTable("roles", {
+    id: integer("id").primaryKey(),
+    name: text("name").unique().notNull(),
+    level: integer("level").notNull()
+});
+//ROLES TO USER TABLE
+const rolesUserTable = sqliteTable("roles_user", {
+    id: integer("id").primaryKey(),
+    roleId: integer("role_id").notNull().references(() => rolesTable.id),
+    userId: integer("user_id").notNull().references(() => userTable.id)
+});
+module.exports = { userTable, rolesTable, rolesUserTable }

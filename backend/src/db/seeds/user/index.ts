@@ -6,15 +6,21 @@ async function userSeed() {
     const users = [
         [
             1,
-            "user1@example.com",
+            "funcionario@example.com",
             await bcrypt.hash("password1", 10),
             "avatar1.jpg"
         ],
         [
             2,
-            "user2@example.com",
+            "chefe@example.com",
             await bcrypt.hash("password2", 10),
             "avatar2.jpg"
+        ],
+        [
+            3,
+            "desenvolvedor@example.com",
+            await bcrypt.hash("password3", 10),
+            "avatar3.jpg"
         ]
     ];
 
