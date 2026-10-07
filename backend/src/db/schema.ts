@@ -57,6 +57,7 @@ const cashierTable = sqliteTable("cashier", {
     totalValue: real("total_value").notNull(),
     methodId: integer("method_id").notNull().references(() => paymentMethodTable.id),
     clientId: integer("client_id").references(() => clientsTable.id),
+    installmentId: integer("installment_id").references(() => installmentsTable.id),
     dtSale: text("dt_sale").notNull()
 });
 //PRODUCTS STOCK
