@@ -41,7 +41,7 @@ const paymentMethodTable = sqliteTable("payment_method", {
 //INSTALLMENTS
 const installmentsTable = sqliteTable("installments", {
     id: integer("id").primaryKey(),
-    in: integer("in").notNull(),
+    inInstallments: integer("in_installments").notNull(),
     percentage: integer("percentage").notNull()
 });
 module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable, installmentsTable }
