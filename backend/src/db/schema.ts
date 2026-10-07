@@ -18,4 +18,16 @@ const rolesUserTable = sqliteTable("roles_user", {
     roleId: integer("role_id").notNull().references(() => rolesTable.id),
     userId: integer("user_id").notNull().references(() => userTable.id)
 });
-module.exports = { userTable, rolesTable, rolesUserTable }
+//PRODUCTS TABLE
+const productsTable = sqliteTable("products", {
+    id: integer("id").primaryKey(),
+    smCode: text("sm_code").unique().notNull(),
+    barCode: text("bar_code").unique().notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    value: text("value").default("0.00"),
+    cost: text("cost").default("0.00"),
+    amount: text("amount").default("0"),
+    status: integer("status",{mode:"boolean"}).notNull()
+});
+module.exports = { userTable, rolesTable, rolesUserTable, productsTable }
