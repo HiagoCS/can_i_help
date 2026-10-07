@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 const users = require("./user/index");
 const roles = require("./roles/index");
+const products = require("./products/index");
 async function post(fastify: FastifyInstance) {
     await users(fastify);
     await roles(fastify);
+    await products(fastify);
     fastify.post("/", async () => {
         return {
             message: "EightCS API funcionando! POST"
