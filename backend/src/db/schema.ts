@@ -51,4 +51,19 @@ const clientsTable = sqliteTable("clients", {
     cpf: text("cpf").unique(),
     methodId: integer("method_id").notNull().references(() => paymentMethodTable.id)
 });
-module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable, installmentsTable, clientsTable }
+//CASHIER TABLE
+const cashierTable = sqliteTable("cashier", {
+    id: integer("id").primaryKey(),
+    totalValue: real("total_value").notNull(),
+    methodId: integer("method_id").notNull().references(() => paymentMethodTable.id),
+    clientId: integer("client_id").references(() => clientsTable.id),
+    dtSale: text("dt_sale").notNull()
+});
+//PRODUCTS STOCK
+const stockSaleTable = sqliteTable("stock_sale", {
+    id: integer("id").primaryKey(),
+    saleId: integer("sale_id").notNull().references(() => cashierTable.id),
+    productId: integer("product_id").notNull().references(() => productsTable.id),
+    quntSale: integer("qunt_sale").notNull()
+});
+module.exports = { userTable, rolesTable, rolesUserTable, productsTable, paymentMethodTable, installmentsTable, clientsTable, cashierTable, stockSaleTable}
