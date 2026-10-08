@@ -3,8 +3,24 @@ const { sqlite } = require("../../index");
 async function productsSeed() {
 
     const insert = sqlite.prepare(`
-        INSERT OR REPLACE INTO products(id, sm_code, bar_code, name, description, value, cost, amount, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        INSERT OR REPLACE INTO products(
+            id,
+            sm_code,
+            bar_code,
+            name,
+            description,
+            value,
+            cost,
+            amount,
+            ncm,
+            cst,
+            csosn,
+            icms,
+            status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
     const products = [
 
         [
@@ -16,6 +32,10 @@ async function productsSeed() {
             "45.90",
             "28.00",
             "25",
+            "87141000",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -28,6 +48,10 @@ async function productsSeed() {
             "139.90",
             "92.00",
             "12",
+            "87141000",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -40,6 +64,10 @@ async function productsSeed() {
             "24.90",
             "15.50",
             "40",
+            "85111000",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -52,6 +80,10 @@ async function productsSeed() {
             "32.90",
             "19.00",
             "30",
+            "84212300",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -64,6 +96,10 @@ async function productsSeed() {
             "38.90",
             "23.00",
             "18",
+            "84213100",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -76,6 +112,10 @@ async function productsSeed() {
             "29.90",
             "17.00",
             "22",
+            "87141000",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -88,6 +128,10 @@ async function productsSeed() {
             "21.90",
             "12.50",
             "15",
+            "87141000",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -100,6 +144,10 @@ async function productsSeed() {
             "59.90",
             "36.00",
             "10",
+            "85395200",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -112,6 +160,10 @@ async function productsSeed() {
             "79.90",
             "48.00",
             "8",
+            "70091000",
+            "0",
+            "0",
+            0,
             1
         ],
 
@@ -124,6 +176,10 @@ async function productsSeed() {
             "34.90",
             "21.00",
             "20",
+            "40139000",
+            "0",
+            "0",
+            0,
             1
         ]
 

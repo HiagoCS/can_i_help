@@ -3,12 +3,20 @@ const { sqlite } = require("../../index");
 async function cashierSeed() {
     /*
      * Produtos disponíveis para as vendas.
+     *
+     * Além dos dados comerciais, carregamos os dados fiscais
+     * para garantir que os produtos estejam preparados para
+     * uma futura emissão fiscal.
      */
     const products = sqlite.prepare(`
         SELECT
             id,
             name,
-            value
+            value,
+            ncm,
+            cst,
+            csosn,
+            icms
         FROM products
         WHERE status = 1
         ORDER BY id ASC
@@ -85,14 +93,40 @@ async function cashierSeed() {
     /*
      * Clientes existentes.
      *
-     * Cliente é opcional na venda, então a seed funciona
-     * mesmo que ainda não existam clientes.
+     * Cliente é opcional na venda.
      */
     const clients = sqlite.prepare(`
         SELECT id
         FROM clients
         ORDER BY id ASC
     `).all();
+
+    /*
+     * Validação dos dados fiscais dos produtos.
+     *
+     * O NCM precisa existir porque será utilizado na emissão
+     * ou receberá fallback da fiscal_config durante a emissão.
+     *
+     * CST, CSOSN e ICMS já possuem valor padrão 0 no produto,
+     * então validamos apenas se os campos estão disponíveis.
+     */
+    for (const product of products) {
+        if (!product.ncm) {
+            console.warn(
+                `Produto "${product.name}" não possui NCM.`
+            );
+        }
+
+        if (
+            product.cst === null ||
+            product.csosn === null ||
+            product.icms === null
+        ) {
+            throw new Error(
+                `Dados fiscais incompletos para o produto "${product.name}".`
+            );
+        }
+    }
 
     /*
      * Como essa é uma seed de teste, removemos as vendas
@@ -129,16 +163,25 @@ async function cashierSeed() {
     `);
 
     /*
-     * INSERT DOS PRODUTOS DA VENDA
+     * INSERT DOS PRODUTOS DA VENDA.
+     *
+     * value:
+     *
+     * null
+     * → utiliza products.value
+     *
+     * valor preenchido
+     * → utiliza esse valor como preço efetivamente vendido
      */
     const insertStockSale = sqlite.prepare(`
         INSERT INTO stock_sale (
             id,
+            value,
             sale_id,
             product_id,
             qunt_sale
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
     `);
 
     /*
@@ -149,7 +192,12 @@ async function cashierSeed() {
      *   1 = segundo produto
      *   2 = terceiro produto
      *
-     * As vendas 3, 6 e 10 são no crédito.
+     * value:
+     *   null       = usa products.value
+     *   "XX.XX"    = preço praticado na venda
+     *
+     * Alguns itens possuem desconto propositalmente para
+     * testar a regra do stock_sale.value.
      */
     const sales = [
         {
@@ -159,11 +207,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 0,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 },
                 {
                     productIndex: 1,
-                    quantity: 1
+                    quantity: 1,
+                    value: "129.90"
                 }
             ]
         },
@@ -175,11 +225,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 1,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 },
                 {
                     productIndex: 2,
-                    quantity: 1
+                    quantity: 1,
+                    value: "20.00"
                 }
             ]
         },
@@ -191,11 +243,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 0,
-                    quantity: 1
+                    quantity: 1,
+                    value: "40.00"
                 },
                 {
                     productIndex: 2,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 }
             ]
         },
@@ -207,11 +261,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 2,
-                    quantity: 3
+                    quantity: 3,
+                    value: null
                 },
                 {
                     productIndex: 1,
-                    quantity: 1
+                    quantity: 1,
+                    value: null
                 }
             ]
         },
@@ -223,11 +279,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 0,
-                    quantity: 1
+                    quantity: 1,
+                    value: "42.90"
                 },
                 {
                     productIndex: 1,
-                    quantity: 3
+                    quantity: 3,
+                    value: null
                 }
             ]
         },
@@ -239,11 +297,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 1,
-                    quantity: 2
+                    quantity: 2,
+                    value: "125.00"
                 },
                 {
                     productIndex: 2,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 }
             ]
         },
@@ -255,11 +315,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 0,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 },
                 {
                     productIndex: 2,
-                    quantity: 1
+                    quantity: 1,
+                    value: null
                 }
             ]
         },
@@ -271,11 +333,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 1,
-                    quantity: 1
+                    quantity: 1,
+                    value: null
                 },
                 {
                     productIndex: 2,
-                    quantity: 3
+                    quantity: 3,
+                    value: "22.00"
                 }
             ]
         },
@@ -287,11 +351,13 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 0,
-                    quantity: 3
+                    quantity: 3,
+                    value: "43.90"
                 },
                 {
                     productIndex: 1,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 }
             ]
         },
@@ -303,15 +369,18 @@ async function cashierSeed() {
             items: [
                 {
                     productIndex: 0,
-                    quantity: 2
+                    quantity: 2,
+                    value: null
                 },
                 {
                     productIndex: 1,
-                    quantity: 1
+                    quantity: 1,
+                    value: "135.00"
                 },
                 {
                     productIndex: 2,
-                    quantity: 1
+                    quantity: 1,
+                    value: null
                 }
             ]
         }
@@ -329,7 +398,11 @@ async function cashierSeed() {
         let subtotal = 0;
 
         /*
-         * Calcula o subtotal através dos produtos.
+         * Calcula o subtotal usando:
+         *
+         * stock_sale.value
+         * OU
+         * products.value
          */
         for (const item of sale.items) {
             const product = products[item.productIndex];
@@ -351,7 +424,45 @@ async function cashierSeed() {
                 );
             }
 
-            subtotal += productValue * item.quantity;
+            /*
+             * Valor efetivamente praticado na venda.
+             *
+             * Se stock_sale.value estiver preenchido,
+             * ele prevalece sobre products.value.
+             */
+            const saleValue =
+                item.value !== null
+                    ? Number(item.value)
+                    : productValue;
+
+            if (
+                !Number.isFinite(saleValue) ||
+                saleValue < 0
+            ) {
+                throw new Error(
+                    `Valor de venda inválido para o produto "${product.name}".`
+                );
+            }
+
+            /*
+             * Desconto não pode ser negativo.
+             *
+             * Se o valor da venda for maior que o valor original,
+             * não tratamos a diferença como desconto.
+             */
+            const discount =
+                Math.max(productValue - saleValue, 0);
+
+            if (discount > 0) {
+                console.log(
+                    `Venda ${sale.id} | ${product.name} | ` +
+                    `Preço original: R$ ${productValue.toFixed(2)} | ` +
+                    `Preço venda: R$ ${saleValue.toFixed(2)} | ` +
+                    `Desconto: R$ ${discount.toFixed(2)}`
+                );
+            }
+
+            subtotal += saleValue * item.quantity;
         }
 
         /*
@@ -445,6 +556,7 @@ async function cashierSeed() {
 
             insertStockSale.run(
                 stockSaleId++,
+                item.value,
                 sale.id,
                 product.id,
                 item.quantity
