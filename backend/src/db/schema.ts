@@ -75,6 +75,9 @@ const companyTable = sqliteTable("company", {
 
     id: integer("id").primaryKey(),
 
+    bossUserId: integer("boss_user_id")
+        .unique()
+        .references(() => userTable.id),
     cnpj: text("cnpj")
         .notNull()
         .unique(),
@@ -142,6 +145,10 @@ const fiscalConfigTable = sqliteTable("fiscal_config", {
     ncmDefault: text("ncm_default")
         .notNull(),
 
+    // Natureza padrão para novas operações fiscais.
+    natOpDefault: text("nat_op_default")
+        .notNull()
+        .default("Venda de Mercadoria"),
     // Novo Regime Tributário
     // Padrão = 0
     ibs: real("ibs")
@@ -217,6 +224,10 @@ const productsTable = sqliteTable("products", {
     amount: text("amount")
         .default("0"),
 
+    unitMeasure: text("unit_measure")
+        .notNull()
+        .default("UN"),
+
     // ========================
     // DADOS FISCAIS DO PRODUTO
     // ========================
@@ -245,6 +256,30 @@ const productsTable = sqliteTable("products", {
 // PAYMENT METHODS
 // ============================================================
 
+const updateStockTable = sqliteTable("update_stock", {
+    id: integer("id").primaryKey(),
+    productId: integer("product_id").notNull(),
+    movementType: text("movement_type").notNull(),
+    quntRemove: integer("qunt_remove").notNull().default(0),
+    quntAdd: integer("qunt_add").notNull().default(0),
+    dtUpdate: text("dt_update").notNull(),
+    referenceId: integer("reference_id"),
+    movementValue: text("movement_value"),
+    unitMeasure: text("unit_measure").notNull().default("UN"),
+    notes: text("notes"),
+    smCode: text("sm_code").notNull(),
+    barCode: text("bar_code").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    value: text("value"),
+    cost: text("cost"),
+    amount: text("amount"),
+    ncm: text("ncm"),
+    cst: text("cst").notNull(),
+    csosn: text("csosn").notNull(),
+    icms: real("icms").notNull(),
+    status: integer("status", { mode: "boolean" }).notNull()
+});
 const paymentMethodTable = sqliteTable("payment_method", {
 
     id: integer("id").primaryKey(),
@@ -300,31 +335,24 @@ const clientsTable = sqliteTable("clients", {
     // ENDEREÇO FISCAL
     // ========================
 
-    address: text("address")
-        .notNull(),
+    address: text("address"),
 
-    number: text("number")
-        .notNull(),
+    number: text("number"),
 
     complement: text("complement"),
 
-    neighborhood: text("neighborhood")
-        .notNull(),
+    neighborhood: text("neighborhood"),
 
-    city: text("city")
-        .notNull(),
+    city: text("city"),
 
-    cityIbge: text("city_ibge")
-        .notNull(),
+    cityIbge: text("city_ibge"),
 
-    state: text("state")
-        .notNull(),
+    state: text("state"),
 
     zipCode: text("zip_code"),
 
     // Forma de pagamento preferencial
     methodId: integer("method_id")
-        .notNull()
         .references(() => paymentMethodTable.id)
 
 });
@@ -351,6 +379,10 @@ const cashierTable = sqliteTable("cashier", {
     installmentId: integer("installment_id")
         .references(() => installmentsTable.id),
 
+    customerName: text("customer_name"),
+
+    customerTaxId: text("customer_tax_id"),
+
     dtSale: text("dt_sale")
         .notNull()
 
@@ -376,7 +408,11 @@ const stockSaleTable = sqliteTable("stock_sale", {
         .references(() => productsTable.id),
 
     quntSale: integer("qunt_sale")
+        .notNull(),
+
+    unitMeasure: text("unit_measure")
         .notNull()
+        .default("UN")
 
 });
 
@@ -511,6 +547,10 @@ const fiscalInvoiceItemsTable = sqliteTable("fiscal_invoice_items", {
 
     productName: text("product_name")
         .notNull(),
+
+    unitMeasure: text("unit_measure")
+        .notNull()
+        .default("UN"),
 
     barCode: text("bar_code"),
 
@@ -748,6 +788,7 @@ module.exports = {
     fiscalCertificateTable,
 
     productsTable,
+    updateStockTable,
 
     paymentMethodTable,
     installmentsTable,

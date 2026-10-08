@@ -1,10 +1,13 @@
 const { sqlite } = require("../../index");
 
 async function companySeed() {
+    const bossUser = sqlite.prepare("SELECT u.id FROM users u INNER JOIN roles_user ru ON ru.user_id = u.id INNER JOIN roles r ON r.id = ru.role_id WHERE r.name = 'boss' AND r.level >= 3 AND u.status = 1 ORDER BY u.id LIMIT 1").get();
+    if (!bossUser) throw new Error("Crie um usuário administrativo com role boss antes da empresa.");
 
     const insert = sqlite.prepare(`
         INSERT OR REPLACE INTO company(
             id,
+            boss_user_id,
             cnpj,
             legal_name,
             trade_name,
@@ -20,12 +23,13 @@ async function companySeed() {
             state,
             zip_code
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const company = [
         [
             1,
+            bossUser.id,
             "00.000.000/0001-00",
             "EMPRESA TESTE MOTOPECAS LTDA",
             "GlauGrau Motopeças",

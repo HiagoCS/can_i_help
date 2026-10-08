@@ -5,13 +5,13 @@ async function users(fastify: FastifyInstance) {
 
     fastify.get("/users",
         {
-            onRequest: [fastify.authenticate]
+            onRequest: [fastify.authenticate, fastify.authorize(2)]
         },
         async () => {
 
             const users = sqlite
                 .prepare(`
-                    SELECT id, email, avatar
+                    SELECT id, email, avatar, status
                     FROM users
                 `)
                 .all();
@@ -58,7 +58,7 @@ async function users(fastify: FastifyInstance) {
 
             const user = sqlite
                 .prepare(`
-                    SELECT id, email, avatar
+                    SELECT id, email, avatar, status
                     FROM users
                     WHERE id = ?
                 `)
@@ -102,7 +102,7 @@ async function users(fastify: FastifyInstance) {
 
             const user = sqlite
                 .prepare(`
-                    SELECT id, email, avatar
+                    SELECT id, email, avatar, status
                     FROM users
                     WHERE id = ?
                 `)

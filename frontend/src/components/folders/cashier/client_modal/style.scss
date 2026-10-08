@@ -1,0 +1,122 @@
+.cashier-client-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    overflow-y: auto;
+    padding: clamp(0.75rem, 4vw, 2rem);
+    background: rgba(0, 0, 0, 0.42);
+}
+
+.cashier-client-modal {
+    width: min(34rem, 100%);
+    max-height: min(82vh, 42rem);
+    display: flex;
+    flex-direction: column;
+    padding: 0.65rem clamp(0.85rem, 3vw, 1.5rem) 1rem;
+    border-radius: 0.35rem;
+    background: #ffffff;
+    color: #5c5c5c;
+    box-shadow: 0 0.8rem 2.5rem rgba(0, 0, 0, 0.2);
+}
+
+.cashier-client-modal__header {
+    min-height: 3.6rem;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    h2 {
+        margin: 0;
+        font-family: "Quicksand-Bold", sans-serif;
+        font-size: clamp(1.25rem, 5vw, 1.7rem);
+        text-align: center;
+    }
+
+    button {
+        width: 2.25rem;
+        height: 2.25rem;
+        position: absolute;
+        top: 0;
+        right: -0.4rem;
+        border: 1px solid #b8d3e7;
+        border-radius: 0.2rem;
+        background: #ffffff;
+        color: #777777;
+        font-size: 1.5rem;
+        cursor: pointer;
+    }
+}
+
+.cashier-client-modal__search input {
+    width: 100%;
+    min-height: 2.65rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid #c9c9c9;
+    border-radius: 0.3rem;
+    font: inherit;
+}
+
+.cashier-client-modal__list {
+    min-height: 7rem;
+    overflow-y: auto;
+    margin-top: 0.75rem;
+
+    > p {
+        padding: 1rem 0.25rem;
+        text-align: center;
+    }
+}
+
+.cashier-client-modal__option {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.45rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #d7d7d7;
+    border-radius: 0.3rem;
+    cursor: pointer;
+
+    input { accent-color: #7063e6; }
+    span { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: baseline; }
+    small { color: #6b6b6b; }
+    &.is-selected { border-color: #7063e6; background: #f5f3ff; }
+}
+
+.cashier-client-modal__hint {
+    margin: 0.3rem 0 0.8rem;
+    color: #66737b;
+    font-size: 0.8rem;
+}
+
+.cashier-client-modal__error { color: #9c2020; }
+
+.cashier-client-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.55rem;
+
+    button {
+        min-height: 2.55rem;
+        padding: 0.45rem 0.8rem;
+        border: 0;
+        border-radius: 0.3rem;
+        background: #6c757d;
+        color: #ffffff;
+        font-family: "Quicksand-Bold", sans-serif;
+        cursor: pointer;
+
+        &:last-child { background: #7063e6; }
+        &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+}
+
+@media (max-width: 520px) {
+    .cashier-client-modal__actions {
+        display: grid;
+        grid-template-columns: 1fr 1.4fr;
+    }
+}

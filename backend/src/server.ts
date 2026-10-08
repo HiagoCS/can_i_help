@@ -5,6 +5,7 @@ import Fastify = require("fastify");
 import cors = require("@fastify/cors");
 import fastifyStatic = require("@fastify/static");
 import cookie = require("@fastify/cookie");
+import websocket = require("@fastify/websocket");
 
 const { sqlite } = require("./db/index");
 
@@ -12,14 +13,17 @@ const getRoute = require("./routes/get/index");
 const postRoute = require("./routes/post/index");
 const deleteRoute = require("./routes/delete/index");
 const putRoute = require("./routes/put/index");
+const settingsRoutes = require("./routes/settings/index");
 
 const port = Number(process.env.PORT || process.env.FASTIFY_API_PORT || 3000);
 
 const server = Fastify({
-    logger: true
+    logger: true,
+    bodyLimit: 12 * 1024 * 1024
 });
 
 server.register(cookie);
+server.register(websocket);
 server.register(require("@fastify/jwt"), {
     secret: process.env.JWT_SECRET!,
     cookie: {
@@ -43,6 +47,10 @@ server.decorate(
     async function (request: any, reply: Fastify.FastifyReply){
         try {
             await request.jwtVerify();
+            const user = sqlite.prepare("SELECT status FROM users WHERE id = ?").get(request.user.id) as { status: number } | undefined;
+            if (!user || !user.status) {
+                return reply.code(403).send({ message: "Esta conta está inativa." });
+            }
         } catch {
             return reply.code(401).send({
                 message: "Unauthorized"
@@ -94,6 +102,9 @@ server.decorate(
     }
 );
 
+server.register(settingsRoutes, {
+    prefix: "/api"
+});
 server.register(getRoute, {
     prefix: "/api"
 });

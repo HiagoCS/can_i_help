@@ -1,0 +1,18 @@
+.column-filter{position:relative;z-index:12;flex:0 0 auto}
+.column-filter__button{min-height:2.45rem;padding:.45rem .7rem;display:flex;align-items:center;justify-content:center;gap:.4rem;border:1px solid #142d3b;border-radius:.35rem;background:#d6e1e7;color:#17313d;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}
+.column-filter__button:hover{background:#c2d6e0}
+.column-filter__button:focus-visible,.column-filter__option:focus-visible{outline:2px solid #1478ed;outline-offset:2px}
+.column-filter__button small{padding:.1rem .35rem;border-radius:1rem;background:#fff;font-size:.68rem}
+.column-filter__menu{position:absolute;top:calc(100% + .4rem);right:0;width:min(20rem,calc(100vw - 2rem));max-height:min(70vh,30rem);padding:.9rem;overflow:auto;border:1px solid #131313;border-radius:.4rem;background:#fff;box-shadow:0 .5rem 1.5rem #0003}
+.column-filter__menu h2{margin:0;font-size:1rem;color:#18313e}
+.column-filter__menu p{margin:.3rem 0 .65rem;color:#50616b;font-size:.78rem;line-height:1.4}
+.column-filter__options{display:flex;flex-direction:column;gap:.2rem}
+.column-filter__option{width:100%;min-height:2.45rem;padding:.35rem .45rem;display:grid;grid-template-columns:minmax(0,1fr) 2.2rem 3.4rem;align-items:center;gap:.45rem;border:0;border-radius:.25rem;background:#fff;color:#233943;text-align:left;font:inherit;font-size:.82rem;cursor:pointer}
+.column-filter__option:hover{background:#f1f5f7}
+.column-filter__option[aria-pressed="true"] .column-filter__switch{border-color:#168b53;background:#168b53}
+.column-filter__option[aria-pressed="true"] .column-filter__switch span{transform:translateX(.95rem)}
+.column-filter__option[aria-pressed="true"] small{color:#126b41}
+.column-filter__option small{color:#65747b;text-align:right;font-size:.68rem}
+.column-filter__switch{width:2.05rem;height:1.12rem;padding:.12rem;display:flex;align-items:center;border:1px solid #8a969b;border-radius:1rem;background:#b9c2c6;transition:background .15s,border-color .15s}
+.column-filter__switch span{width:.78rem;height:.78rem;border-radius:50%;background:#fff;transition:transform .15s}
+@media(max-width:560px){.column-filter{width:auto}.column-filter__menu{right:0}}

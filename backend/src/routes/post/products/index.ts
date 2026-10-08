@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
+const { recordProductMovement } = require("../../../db/product_stock");
 
 
 /**
@@ -172,6 +173,11 @@ async function products(fastify: FastifyInstance) {
                 value,
                 cost,
                 amount,
+                unit_measure,
+                ncm,
+                cst,
+                csosn,
+                icms,
                 status
             } = request.body as {
                 sm_code?: string | null;
@@ -181,10 +187,17 @@ async function products(fastify: FastifyInstance) {
                 value?: number | string | null;
                 cost?: number | string | null;
                 amount?: number | string | null;
+                unit_measure?: string | null;
+                ncm?: string | null;
+                cst?: string | number | null;
+                csosn?: string | number | null;
+                icms?: number | string | null;
                 status?: number | null;
             };
 
 
+            const finalUnitMeasure=String(unit_measure??"UN").trim().toUpperCase();
+            if(!finalUnitMeasure||finalUnitMeasure.length>10)return reply.code(400).send({message:"Informe uma unidade de medida válida (até 10 caracteres)."});
             // REQUIRED FIELD
             if (!name || !name.trim()) {
 
@@ -194,6 +207,23 @@ async function products(fastify: FastifyInstance) {
             }
 
 
+
+            const fiscalConfig = sqlite.prepare("SELECT tax_regime, ncm_default FROM fiscal_config ORDER BY id LIMIT 1").get() as { tax_regime?: string; ncm_default?: string } | undefined;
+            const companyConfig = sqlite.prepare("SELECT tax_regime FROM company ORDER BY id LIMIT 1").get() as { tax_regime?: string } | undefined;
+            const isNormalRegime = (fiscalConfig?.tax_regime ?? companyConfig?.tax_regime) === "REGIME_NORMAL";
+            const finalNcm = (typeof ncm === "string" ? ncm.trim() : "") || fiscalConfig?.ncm_default || null;
+            let finalCst = "0";
+            let finalCsosn = "0";
+            let finalIcms = 0;
+
+            if (isNormalRegime) {
+                finalCst = String(cst ?? "").trim();
+                finalCsosn = String(csosn ?? "").trim();
+                finalIcms = Number(icms);
+                if (!finalCst || !finalCsosn || icms === undefined || icms === null || !Number.isFinite(finalIcms) || finalIcms < 0) {
+                    return reply.code(400).send({ message: "No Regime Normal, CST, CSOSN e ICMS são obrigatórios." });
+                }
+            }
             /*
              * VALIDATE VALUE
              *
@@ -395,9 +425,14 @@ async function products(fastify: FastifyInstance) {
                         value,
                         cost,
                         amount,
+                        unit_measure,
+                        ncm,
+                        cst,
+                        csosn,
+                        icms,
                         status
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `)
                 .run(
                     finalSmCode,
@@ -407,6 +442,11 @@ async function products(fastify: FastifyInstance) {
                     finalValue,
                     finalCost,
                     finalAmount,
+                    finalUnitMeasure,
+                    finalNcm,
+                    finalCst,
+                    finalCsosn,
+                    finalIcms,
                     status ?? 1
                 );
 
@@ -414,28 +454,40 @@ async function products(fastify: FastifyInstance) {
             // GET CREATED PRODUCT
             const product = sqlite
                 .prepare(`
-                    SELECT
-                        id,
-                        sm_code,
-                        bar_code,
-                        name,
-                        description,
-                        value,
-                        cost,
-                        amount,
-                        status
-                    FROM products
-                    WHERE id = ?
+                    SELECT * FROM products WHERE id = ?
                 `)
                 .get(result.lastInsertRowid);
 
 
+            recordProductMovement(product, "create", Number(finalAmount), 0);
             return reply.code(201).send({
                 message: "Product created successfully",
                 data: product
             });
         }
     );
+    fastify.post("/product/:id/stock-movement", { onRequest: [fastify.authenticate, fastify.authorize(3)] }, async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const body = (request.body ?? {}) as { direction?: string; quantity?: string | number; notes?: string | null };
+        const quantity = Number(body.quantity);
+        if (!Number.isInteger(quantity) || quantity <= 0 || !["add", "remove"].includes(String(body.direction))) return reply.code(400).send({ message: "Informe uma quantidade inteira maior que zero." });
+        const product = sqlite.prepare("SELECT * FROM products WHERE id = ?").get(id);
+        if (!product) return reply.code(404).send({ message: "Produto não encontrado." });
+        const amount = Number(product.amount) || 0;
+        const adding = body.direction === "add";
+        if (!adding && quantity > amount) return reply.code(409).send({ message: "A quantidade em estoque não pode ficar negativa." });
+        try {
+            sqlite.exec("BEGIN IMMEDIATE");
+            recordProductMovement(product, adding ? "stock_add" : "stock_remove", adding ? quantity : 0, adding ? 0 : quantity, {notes:String(body.notes??"").trim()||null});
+            sqlite.prepare("UPDATE products SET amount = ? WHERE id = ?").run(String(amount + (adding ? quantity : -quantity)), id);
+            sqlite.exec("COMMIT");
+            return { message: "Estoque atualizado.", data: sqlite.prepare("SELECT * FROM products WHERE id = ?").get(id) };
+        } catch (error) {
+            sqlite.exec("ROLLBACK");
+            request.log.error(error);
+            return reply.code(500).send({ message: "Não foi possível registrar a movimentação de estoque." });
+        }
+    });
 }
 
 

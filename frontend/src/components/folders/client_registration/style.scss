@@ -1,0 +1,191 @@
+.client-registration {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(108deg, #ff9915 0%, #d1a15d 53%, #6eafd5 100%);
+    color: #102c3b;
+}
+
+.client-registration__header {
+    min-height: clamp(4.25rem, 8vh, 5.2rem);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem clamp(1rem, 1.2vw, 1.5rem);
+    border-bottom: 3px solid #000000;
+    background: #ff9915;
+
+    h1 {
+        margin: 0;
+        color: #ffffff;
+        font-family: "Quicksand-Bold-Oblique", sans-serif;
+        font-size: clamp(1.45rem, 3vw, 2.6rem);
+        line-height: 1;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        -webkit-text-stroke: 1px #000000;
+        text-shadow: 2px 2px 0 #000000;
+    }
+
+    span {
+        color: #ffffff;
+        font-family: "Quicksand-Regular-Oblique", sans-serif;
+        font-size: clamp(1.15rem, 2.2vw, 1.8rem);
+        text-shadow: 1px 1px 0 #000000;
+    }
+}
+
+.client-registration__content {
+    width: min(42rem, 100%);
+    margin: auto;
+    padding: clamp(0.75rem, 3vw, 2rem);
+}
+
+.client-registration__card {
+    overflow: hidden;
+    border: 3px solid #000000;
+    border-radius: 0.55rem;
+    background: #ffffff;
+    box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.18);
+}
+
+.client-registration__card-heading {
+    padding: 1rem clamp(1rem, 3vw, 1.75rem);
+    border-bottom: 2px solid #000000;
+    background: #72cbd4;
+
+    h2 {
+        margin: 0;
+        font-family: "Quicksand-Bold", sans-serif;
+        font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+    }
+
+    p {
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+    }
+}
+
+.client-registration__fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem 1rem;
+    padding: clamp(1rem, 3vw, 1.75rem);
+}
+
+.client-registration__field {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+
+    span {
+        font-family: "Quicksand-Bold", sans-serif;
+        font-size: 0.85rem;
+    }
+
+    input {
+        width: 100%;
+        min-width: 0;
+        min-height: 2.7rem;
+        padding: 0.5rem 0.65rem;
+        border: 2px solid #111111;
+        border-radius: 0.3rem;
+        background: #ffffff;
+        color: #17242c;
+        font: inherit;
+        font-size: 0.9rem;
+
+        &:focus-visible {
+            outline: 2px solid #1478ed;
+            outline-offset: 1px;
+        }
+    }
+}
+
+.client-registration__hint {
+    margin: 0;
+    padding: 0 clamp(1rem, 3vw, 1.75rem) 1rem;
+    color: #4f626c;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.client-registration__error {
+    margin: 0.4rem clamp(1rem, 3vw, 1.75rem);
+    color: #a32222;
+    font-size: 0.88rem;
+}
+
+.client-registration__actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    padding: 1rem clamp(1rem, 3vw, 1.75rem);
+    border-top: 1px solid #c6d1d8;
+    background: #d4e1e8;
+}
+
+.client-registration__button {
+    min-height: 2.7rem;
+    padding: 0.55rem 1rem;
+    border: 0;
+    border-radius: 0.3rem;
+    color: #ffffff;
+    font-family: "Quicksand-Bold", sans-serif;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+        filter: brightness(0.93);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #111111;
+        outline-offset: 2px;
+    }
+
+    &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+}
+
+.client-registration__button--cancel {
+    background: #6c757d;
+}
+
+.client-registration__button--save {
+    background: #1478ed;
+}
+
+@media (max-width: 600px) {
+    .client-registration__header {
+        align-items: flex-start;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.35rem;
+        padding-block: 0.75rem;
+    }
+
+    .client-registration__content {
+        padding: 0.7rem;
+    }
+
+    .client-registration__fields {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.7rem;
+        padding: 1rem;
+    }
+
+    .client-registration__actions {
+        flex-direction: column-reverse;
+
+        button {
+            width: 100%;
+        }
+    }
+}

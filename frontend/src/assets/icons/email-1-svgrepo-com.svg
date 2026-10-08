@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Aba interior do envelope -->
+  <path fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="36" d="M96 148L256 268L416 148"/>
+  <!-- Corpo externo do envelope com cantos chanfrados -->
+  <path fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="36" d="M128 112H384L436 164V348L384 400H128L76 348V164L128 112Z"/>
+</svg>

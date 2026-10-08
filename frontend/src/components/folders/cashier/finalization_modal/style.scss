@@ -1,0 +1,168 @@
+.cashier-finalization__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+
+    display: grid;
+    place-items: center;
+
+    overflow-y: auto;
+    padding: clamp(0.75rem, 4vw, 2rem);
+
+    background: rgba(0, 0, 0, 0.42);
+}
+
+.cashier-finalization {
+    width: min(32rem, 100%);
+    max-height: min(90vh, 42rem);
+    overflow-y: auto;
+    position: relative;
+
+    padding: clamp(1.5rem, 5vw, 2rem);
+    border-radius: 0.35rem;
+
+    background: #ffffff;
+    color: #5c5c5c;
+    text-align: center;
+    box-shadow: 0 0.8rem 2.5rem rgba(0, 0, 0, 0.2);
+
+    h2 {
+        margin: 0.4rem 0 0.7rem;
+        font-family: "Quicksand-Bold", sans-serif;
+        font-size: clamp(1.35rem, 5vw, 1.8rem);
+    }
+
+    p {
+        margin: 0 0 1.35rem;
+        line-height: 1.5;
+    }
+}
+
+.cashier-finalization__close {
+    width: 2.4rem;
+    height: 2.4rem;
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+
+    border: 1px solid #b8d3e7;
+    border-radius: 0.2rem;
+    background: #ffffff;
+    color: #777777;
+    font-size: 1.7rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cashier-finalization__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.55rem;
+}
+
+.cashier-finalization__button {
+    min-height: 2.65rem;
+    padding: 0.55rem 0.85rem;
+    border: 0;
+    border-radius: 0.3rem;
+    color: #ffffff;
+    font-family: "Quicksand-Bold", sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+
+    &:focus-visible,
+    &:hover:not(:disabled) {
+        filter: brightness(0.93);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #111111;
+        outline-offset: 2px;
+    }
+
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
+    }
+}
+
+.cashier-finalization__button--primary { background: #7063e6; }
+.cashier-finalization__button--secondary,
+.cashier-finalization__button--xml { background: #6c757d; }
+.cashier-finalization__button--pdf { background: #dc3545; }
+.cashier-finalization__button--danfe { background: #0872f9; }
+
+.cashier-finalization__field {
+    display: block;
+    margin: 1.25rem 0;
+    text-align: left;
+
+    span {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-family: "Quicksand-Bold", sans-serif;
+    }
+
+    input {
+        width: 100%;
+        min-height: 2.8rem;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid #999999;
+        border-radius: 0.3rem;
+        font: inherit;
+
+        &:focus-visible {
+            outline: 2px solid #1478ed;
+            outline-offset: 1px;
+        }
+    }
+}
+
+.cashier-finalization__error {
+    color: #a32222;
+    font-size: 0.9rem;
+}
+
+.cashier-finalization__pdf-hint {
+    margin-top: -0.8rem !important;
+    color: #66737b;
+    font-size: 0.78rem;
+}
+
+.cashier-finalization__fiscal-note {
+    padding: 0.65rem;
+    border-radius: 0.25rem;
+    background: #fff4d6;
+    color: #6a4a00;
+    font-size: 0.82rem;
+}
+
+.cashier-finalization__success-icon {
+    width: 4.5rem;
+    height: 4.5rem;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 1rem;
+    border: 4px solid #dff2d4;
+    border-radius: 50%;
+    color: #9bd883;
+    font-size: 3rem;
+}
+
+@media (max-width: 520px) {
+    .cashier-finalization {
+        padding: 1.5rem 1rem 1.1rem;
+    }
+
+    .cashier-finalization__actions--success {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cashier-finalization__button {
+        min-width: 0;
+        padding-inline: 0.55rem;
+        font-size: 0.8rem;
+    }
+}

@@ -3,6 +3,14 @@ const bcrypt = require("bcrypt");
 
 const { sqlite } = require("../../../db/index");
 
+function getHighestRoleLevel(userId: number) {
+    const result = sqlite.prepare(
+        "SELECT COALESCE(MAX(r.level), 0) AS level FROM roles_user ru INNER JOIN roles r ON r.id = ru.role_id WHERE ru.user_id = ?"
+    ).get(userId) as { level: number };
+
+    return Number(result?.level) || 0;
+}
+
 async function users(fastify: FastifyInstance) {
     fastify.post("/login",
         async (request, reply) => {
@@ -28,6 +36,9 @@ async function users(fastify: FastifyInstance) {
                 });
             }
 
+            if (!user.status) {
+                return reply.code(403).send({ message: "Esta conta está inativa. Procure um administrador." });
+            }
             const passwordValid = await bcrypt.compare(
                 password,
                 user.password
@@ -67,7 +78,7 @@ async function users(fastify: FastifyInstance) {
         {
             onRequest: [
                 fastify.authenticate,
-                fastify.authorize(3)
+                fastify.authorize(2)
             ]
         },
         async (request, reply) => {
@@ -83,6 +94,19 @@ async function users(fastify: FastifyInstance) {
                 avatar?: string;
                 roles: number[];
             };
+            const callerLevel = getHighestRoleLevel(request.user.id);
+            if (!Array.isArray(roles) || roles.some((roleId) => !Number.isInteger(roleId)) || new Set(roles).size !== roles.length) {
+                return reply.code(400).send({ message: "Lista de roles inválida." });
+            }
+
+            const roleLookup = sqlite.prepare("SELECT id, level FROM roles WHERE id = ?");
+            const requestedRoles = roles.map((roleId) => roleLookup.get(roleId) as { id: number; level: number } | undefined);
+            if (requestedRoles.some((role) => !role)) {
+                return reply.code(400).send({ message: "Uma ou mais roles não existem." });
+            }
+            if (callerLevel < 3 && requestedRoles.some((role) => Number(role?.level) > callerLevel)) {
+                return reply.code(403).send({ message: "Seu nível não permite conceder uma role superior." });
+            }
 
             const existingUser = sqlite
                 .prepare(`
@@ -106,8 +130,8 @@ async function users(fastify: FastifyInstance) {
             const result = sqlite
                 .prepare(`
                     INSERT INTO users
-                    (email, password, avatar)
-                    VALUES (?, ?, ?)
+                    (email, password, avatar, status)
+                    VALUES (?, ?, ?, 1)
                 `)
                 .run(
                     email,

@@ -20,6 +20,12 @@ async function rolesSeed() {
                 "boss",
                 3,
                 1
+            ],
+            [
+                4,
+                "admin",
+                2,
+                1
             ]
         ];
     

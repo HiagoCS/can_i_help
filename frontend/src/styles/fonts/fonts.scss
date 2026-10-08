@@ -1,0 +1,70 @@
+// Importando as fontes da pasta brandy_2
+@font-face {
+    font-family: 'Brandy';
+    src: url('@/styles/fonts/brandy_2/Brandy.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+// Importando as fontes da pasta quicksand
+@font-face {
+    font-family: 'Quicksand-Bold-Oblique';
+    src: url('@/styles/fonts/quicksand/Quicksand_Bold_Oblique.otf') format('opentype');
+    font-weight: bold;
+    font-style: oblique;
+}
+
+@font-face {
+    font-family: 'Quicksand-Bold';
+    src: url('@/styles/fonts/quicksand/Quicksand_Bold.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Quicksand-Book-Oblique';
+    src: url('@/styles/fonts/quicksand/Quicksand_Book_Oblique.otf') format('opentype');
+    font-weight: normal;
+    font-style: oblique;
+}
+
+@font-face {
+    font-family: 'Quicksand-Book';
+    src: url('@/styles/fonts/quicksand/Quicksand_Book.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Quicksand-Dash';
+    src: url('@/styles/fonts/quicksand/Quicksand_Dash.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Quicksand-Regular-Oblique';
+    src: url('@/styles/fonts/quicksand/Quicksand_Light_Oblique.otf') format('opentype');
+    font-weight: 300;
+    font-style: oblique;
+}
+
+@font-face {
+    font-family: 'Quicksand-Regular';
+    src: url('@/styles/fonts/quicksand/Quicksand_Light.otf') format('opentype');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nauticus-Bold';
+    src: url('@/styles/fonts/nauticus-sans/NauticusSans-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Nauticus';
+    src: url('@/styles/fonts/nauticus-sans/NauticusSans.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+}

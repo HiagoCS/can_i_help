@@ -3,10 +3,18 @@ const bcrypt = require("bcrypt");
 
 const { sqlite } = require("../../../db/index");
 
+function getHighestRoleLevel(userId: number) {
+    const result = sqlite.prepare(
+        "SELECT COALESCE(MAX(r.level), 0) AS level FROM roles_user ru INNER JOIN roles r ON r.id = ru.role_id WHERE ru.user_id = ?"
+    ).get(userId) as { level: number };
+
+    return Number(result?.level) || 0;
+}
+
 async function users(fastify: FastifyInstance) {
     fastify.put("/user/:id",
         {
-            onRequest: [fastify.authenticate]
+            onRequest: [fastify.authenticate, fastify.authorize(2)]
         },
         async (request, reply) => {
 
@@ -18,14 +26,29 @@ async function users(fastify: FastifyInstance) {
                 email,
                 password,
                 avatar,
+                status,
                 roles
             } = request.body as {
                 email?: string;
                 password?: string;
                 avatar?: string;
+                status?: boolean | number;
                 roles?: number[];
             };
 
+
+            const targetId = Number(id);
+            const callerLevel = getHighestRoleLevel(request.user.id);
+            if (roles !== undefined && targetId === request.user.id) {
+                return reply.code(403).send({ message: "Não é permitido alterar as próprias permissões por esta tela." });
+            }
+            const validStatuses: Array<boolean | number> = [true, false, 0, 1];
+            if (status !== undefined && !validStatuses.some((value) => value === status)) {
+                return reply.code(400).send({ message: "Status inválido." });
+            }
+            if (status !== undefined && !Boolean(status) && targetId === request.user.id) {
+                return reply.code(403).send({ message: "Não é permitido desativar a própria conta." });
+            }
             const user = sqlite
                 .prepare(`
                     SELECT id
@@ -39,7 +62,24 @@ async function users(fastify: FastifyInstance) {
                     message: "User not found"
                 });
             }
+            const targetLevel = getHighestRoleLevel(targetId);
+            if (callerLevel < 3 && targetLevel > callerLevel) {
+                return reply.code(403).send({ message: "Seu nível não permite alterar um usuário com acesso superior." });
+            }
+            if (roles !== undefined) {
+                if (!Array.isArray(roles) || roles.some((roleId) => !Number.isInteger(roleId)) || new Set(roles).size !== roles.length) {
+                    return reply.code(400).send({ message: "Lista de roles inválida." });
+                }
 
+                const roleLookup = sqlite.prepare("SELECT id, level FROM roles WHERE id = ?");
+                const requestedRoles = roles.map((roleId) => roleLookup.get(roleId) as { id: number; level: number } | undefined);
+                if (requestedRoles.some((role) => !role)) {
+                    return reply.code(400).send({ message: "Uma ou mais roles não existem." });
+                }
+                if (callerLevel < 3 && requestedRoles.some((role) => Number(role?.level) > callerLevel)) {
+                    return reply.code(403).send({ message: "Seu nível não permite conceder uma role superior." });
+                }
+            }
             // Verifica se o novo email já pertence a outro usuário
 
             if (email) {
@@ -61,6 +101,7 @@ async function users(fastify: FastifyInstance) {
             }
 
             let passwordHash: string | undefined;
+            const statusValue = status === undefined ? null : Number(Boolean(status));
 
             if (password) {
                 passwordHash = await bcrypt.hash(
@@ -77,13 +118,15 @@ async function users(fastify: FastifyInstance) {
                     SET
                         email = COALESCE(?, email),
                         password = COALESCE(?, password),
-                        avatar = COALESCE(?, avatar)
+                        avatar = COALESCE(?, avatar),
+                        status = COALESCE(?, status)
                     WHERE id = ?
                 `)
                 .run(
                     email ?? null,
                     passwordHash ?? null,
                     avatar ?? null,
+                    statusValue,
                     id
                 );
 
@@ -138,7 +181,7 @@ async function users(fastify: FastifyInstance) {
 
             const updatedUser = sqlite
                 .prepare(`
-                    SELECT id, email, avatar
+                    SELECT id, email, avatar, status
                     FROM users
                     WHERE id = ?
                 `)
@@ -186,7 +229,7 @@ async function users(fastify: FastifyInstance) {
 
             // Verifica se o usuário existe
 
-            const user = sqlite
+const user = sqlite
                 .prepare(`
                 SELECT id
                 FROM users

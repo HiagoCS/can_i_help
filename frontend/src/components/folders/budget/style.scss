@@ -1,0 +1,219 @@
+.app.budget-page {
+    width: 100%;
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+
+    overflow: hidden;
+
+    background:
+    linear-gradient(
+        125deg,
+        rgba(255, 255, 255, 0.07) 0%,
+        rgba(255, 255, 255, 0.01) 18%,
+        rgba(0, 0, 0, 0.12) 35%,
+        rgba(255, 255, 255, 0.04) 52%,
+        rgba(0, 0, 0, 0.18) 68%,
+        rgba(255, 255, 255, 0.03) 82%,
+        rgba(0, 0, 0, 0.2) 100%
+    ),
+    linear-gradient(
+        120deg,
+        #080808 0%,
+        #181818 25%,
+        #2A2A2A 45%,
+        #111111 60%,
+        #252525 78%,
+        #070707 100%
+    );
+
+    color: #1d1d1d;
+}
+
+.budget-container {
+    width: min(1200px, 88%);
+
+    margin: 0 auto;
+
+    display: grid;
+    grid-template-columns: 1fr 420px;
+
+    align-items: center;
+
+    gap: 5rem;
+}
+
+/* =========================================================
+   CONTEÚDO
+========================================================= */
+
+.budget-content {
+    color: #ffffff;
+
+    .budget-label {
+        display: inline-block;
+
+        margin-bottom: 1rem;
+
+        padding: 0.55rem 0.85rem;
+
+        border-radius: 999px;
+
+        background: rgba(255, 255, 255, 0.14);
+
+        font-size: 0.75rem;
+        font-weight: 700;
+
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+
+        color: #ffffff;
+    }
+
+    h1 {
+        margin: 0 0 1.5rem;
+
+        max-width: 700px;
+
+        font-size: clamp(2.5rem, 5vw, 5rem);
+        line-height: 1;
+        font-weight: 700;
+
+        letter-spacing: -0.04em;
+    }
+
+    .budget-description {
+        max-width: 650px;
+
+        margin: 0;
+
+        font-size: clamp(1rem, 1.5vw, 1.25rem);
+        line-height: 1.7;
+
+        color: rgba(255, 255, 255, 0.88);
+    }
+}
+
+/* =========================================================
+   DESTAQUES
+========================================================= */
+
+.budget-highlights {
+    display: flex;
+    flex-wrap: wrap;
+
+    gap: 0.65rem;
+
+    margin-top: 2rem;
+}
+
+.budget-highlights span {
+    padding: 0.65rem 0.8rem;
+
+    border-radius: 7px;
+
+    background: rgba(255, 255, 255, 0.13);
+
+    font-size: 0.8rem;
+    font-weight: 600;
+
+    color: #ffffff;
+}
+
+
+
+/* =========================================================
+   RESPONSIVIDADE
+========================================================= */
+
+@media (max-width: 900px) {
+
+    .budget-page {
+        padding: 5rem 0;
+    }
+
+    .budget-container {
+        grid-template-columns: 1fr;
+
+        max-width: 620px;
+
+        gap: 3rem;
+    }
+
+    .budget-content {
+        text-align: center;
+
+        h1 {
+            margin-inline: auto;
+        }
+
+        .budget-description {
+            margin-inline: auto;
+        }
+    }
+
+    .budget-highlights {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 600px) {
+
+    .budget-page {
+        min-height: auto;
+
+        padding: 4rem 0;
+    }
+
+    .budget-container {
+        width: 90%;
+
+        gap: 2rem;
+    }
+
+    .budget-content {
+
+        .budget-label {
+            font-size: 0.68rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+        }
+
+        .budget-description {
+            font-size: 1rem;
+        }
+    }
+
+    .budget-card {
+        padding: 1.4rem;
+
+        border-radius: 15px;
+    }
+
+    .budget-card-header {
+
+        h2 {
+            font-size: 1.4rem;
+        }
+
+        p {
+            font-size: 0.9rem;
+        }
+    }
+
+    .budget-field {
+
+        input,
+        select,
+        textarea {
+            padding: 0.8rem;
+        }
+    }
+
+    .budget-highlights span {
+        font-size: 0.75rem;
+    }
+}

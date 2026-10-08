@@ -1,0 +1,18 @@
+[
+    {
+        "id":"1",
+        "icon":"projects"
+    },
+    {
+        "id":"2",
+        "icon":"materials"
+    },
+    {
+        "id":"3",
+        "icon":"contact"
+    },
+    {
+        "id":"4",
+        "icon":"form"
+    }
+]

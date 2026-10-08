@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
+const { recordProductMovement } = require("../../../db/product_stock");
 
 async function products(fastify: FastifyInstance) {
     fastify.delete("/product/:id",
@@ -19,12 +20,7 @@ async function products(fastify: FastifyInstance) {
             // CHECK PRODUCT
             const product = sqlite
                 .prepare(`
-                    SELECT
-                        id,
-                        sm_code,
-                        bar_code,
-                        name
-                    FROM products
+                    SELECT * FROM products
                     WHERE id = ?
                 `)
                 .get(id);
@@ -35,6 +31,11 @@ async function products(fastify: FastifyInstance) {
                 });
             }
 
+            const sales = sqlite.prepare("SELECT COUNT(*) AS count FROM stock_sale WHERE product_id = ?").get(id);
+            const invoices = sqlite.prepare("SELECT COUNT(*) AS count FROM fiscal_invoice_items WHERE product_id = ?").get(id);
+            if (Number(sales?.count) || Number(invoices?.count)) return reply.code(409).send({ message: "Produto ligado a venda ou documento fiscal. Desative-o para ocultá-lo do Caixa." });
+            sqlite.exec("BEGIN IMMEDIATE");
+            recordProductMovement(product, "delete", 0, 0);
             // DELETE PRODUCT
             sqlite
                 .prepare(`
@@ -42,6 +43,7 @@ async function products(fastify: FastifyInstance) {
                     WHERE id = ?
                 `)
                 .run(id);
+            sqlite.exec("COMMIT");
 
             return {
                 message: "Product deleted successfully",

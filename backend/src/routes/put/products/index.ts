@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
+const { recordProductMovement } = require("../../../db/product_stock");
 
 async function products(fastify: FastifyInstance) {
 
@@ -25,6 +26,11 @@ async function products(fastify: FastifyInstance) {
                 value,
                 cost,
                 amount,
+                unit_measure,
+                ncm,
+                cst,
+                csosn,
+                icms,
                 status
             } = request.body as {
                 sm_code?: string | null;
@@ -34,6 +40,11 @@ async function products(fastify: FastifyInstance) {
                 value?: number | string | null;
                 cost?: number | string | null;
                 amount?: number | string | null;
+                unit_measure?: string | null;
+                ncm?: string | null;
+                cst?: string | number | null;
+                csosn?: string | number | null;
+                icms?: number | string | null;
                 status?: number | null;
             };
 
@@ -41,8 +52,7 @@ async function products(fastify: FastifyInstance) {
             // CHECK PRODUCT
             const product = sqlite
                 .prepare(`
-                    SELECT id
-                    FROM products
+                    SELECT * FROM products
                     WHERE id = ?
                 `)
                 .get(id);
@@ -52,8 +62,28 @@ async function products(fastify: FastifyInstance) {
                     message: "Product not found"
                 });
             }
+            const convertedUnitMeasure=unit_measure===undefined?String(product.unit_measure??"UN"):String(unit_measure??"").trim().toUpperCase();
+            if(!convertedUnitMeasure||convertedUnitMeasure.length>10)return reply.code(400).send({message:"Informe uma unidade de medida válida (até 10 caracteres)."});
 
 
+
+            const fiscalConfig = sqlite.prepare("SELECT tax_regime, ncm_default FROM fiscal_config ORDER BY id LIMIT 1").get() as { tax_regime?: string; ncm_default?: string } | undefined;
+            const companyConfig = sqlite.prepare("SELECT tax_regime FROM company ORDER BY id LIMIT 1").get() as { tax_regime?: string } | undefined;
+            const isNormalRegime = (fiscalConfig?.tax_regime ?? companyConfig?.tax_regime) === "REGIME_NORMAL";
+            const defaultNcm = fiscalConfig?.ncm_default || null;
+            const finalNcm = (typeof ncm === "string" ? ncm.trim() : "") || (ncm === undefined ? product.ncm : null) || defaultNcm;
+            let finalCst = "0";
+            let finalCsosn = "0";
+            let finalIcms = 0;
+
+            if (isNormalRegime) {
+                finalCst = String(cst === undefined ? product.cst : cst ?? "").trim();
+                finalCsosn = String(csosn === undefined ? product.csosn : csosn ?? "").trim();
+                finalIcms = Number(icms === undefined ? product.icms : icms);
+                if (!finalCst || !finalCsosn || !Number.isFinite(finalIcms) || finalIcms < 0) {
+                    return reply.code(400).send({ message: "No Regime Normal, CST, CSOSN e ICMS são obrigatórios." });
+                }
+            }
             /*
              * VALIDATE VALUE
              *
@@ -162,7 +192,8 @@ async function products(fastify: FastifyInstance) {
 
                     if (
                         Number.isNaN(numericAmount) ||
-                        !Number.isFinite(numericAmount)
+                        !Number.isFinite(numericAmount) ||
+                        numericAmount < 0
                     ) {
                         return reply.code(400).send({
                             message: "Amount must be a valid number"
@@ -190,8 +221,7 @@ async function products(fastify: FastifyInstance) {
 
                 const existingSmCode = sqlite
                     .prepare(`
-                        SELECT id
-                        FROM products
+                        SELECT * FROM products
                         WHERE sm_code = ?
                         AND id != ?
                     `)
@@ -223,8 +253,7 @@ async function products(fastify: FastifyInstance) {
 
                 const existingBarCode = sqlite
                     .prepare(`
-                        SELECT id
-                        FROM products
+                        SELECT * FROM products
                         WHERE bar_code = ?
                         AND id != ?
                     `)
@@ -256,6 +285,13 @@ async function products(fastify: FastifyInstance) {
             }
 
 
+            const oldAmount = Number(product.amount) || 0;
+            const nextAmount = amount === undefined || amount === null ? oldAmount : Math.max(0, Math.trunc(Number(amount)));
+            const amountDifference=nextAmount-oldAmount;
+            sqlite.exec("BEGIN IMMEDIATE");
+            try {
+            if(amountDifference>0)recordProductMovement(product,"stock_add",amountDifference,0);
+            if(amountDifference<0)recordProductMovement(product,"stock_remove",0,Math.abs(amountDifference));
             /*
              * UPDATE PRODUCT
              */
@@ -270,6 +306,11 @@ async function products(fastify: FastifyInstance) {
                         value = COALESCE(?, value),
                         cost = COALESCE(?, cost),
                         amount = COALESCE(?, amount),
+                        unit_measure = COALESCE(?, unit_measure),
+                        ncm = ?,
+                        cst = ?,
+                        csosn = ?,
+                        icms = ?,
                         status = COALESCE(?, status)
                     WHERE id = ?
                 `)
@@ -295,6 +336,14 @@ async function products(fastify: FastifyInstance) {
                     convertedCost,
 
                     convertedAmount,
+                    unit_measure !== undefined ? convertedUnitMeasure : null,
+                    finalNcm,
+
+                    finalCst,
+
+                    finalCsosn,
+
+                    finalIcms,
 
                     status !== undefined
                         ? status
@@ -303,6 +352,14 @@ async function products(fastify: FastifyInstance) {
                     id
                 );
 
+
+            if(status!==undefined||sm_code!==undefined||bar_code!==undefined||name!==undefined||description!==undefined||value!==undefined||cost!==undefined||unit_measure!==undefined||ncm!==undefined||cst!==undefined||csosn!==undefined||icms!==undefined){const snapshot=sqlite.prepare("SELECT * FROM products WHERE id = ?").get(id);recordProductMovement(snapshot,status===0?"deactivate":"edit",0,0);}
+            sqlite.exec("COMMIT");
+            } catch (error) {
+                sqlite.exec("ROLLBACK");
+                request.log.error(error);
+                return reply.code(409).send({ message: "Não foi possível atualizar o produto." });
+            }
 
             // GET UPDATED PRODUCT
             const updatedProduct = sqlite
@@ -316,6 +373,7 @@ async function products(fastify: FastifyInstance) {
                         value,
                         cost,
                         amount,
+                        unit_measure,
                         status
                     FROM products
                     WHERE id = ?

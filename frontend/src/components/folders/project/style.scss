@@ -1,0 +1,13 @@
+.project {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(171px, 250px)
+    );
+    justify-content: center;
+    align-items:start;
+    gap: 4rem;
+    width: 100%;
+    max-width:100%;
+    padding: 2vh 0;
+}

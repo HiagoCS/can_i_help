@@ -9,10 +9,11 @@ async function fiscalConfigSeed() {
             tax_regime,
             cfop_default,
             ncm_default,
+            nat_op_default,
             ibs,
             cbs
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const fiscalConfig = [
@@ -22,6 +23,7 @@ async function fiscalConfigSeed() {
             "SIMPLES_NACIONAL",
             "5102",
             "87141000",
+            "Venda de Mercadoria",
             0,
             0
         ]

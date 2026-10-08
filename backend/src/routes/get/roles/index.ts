@@ -8,7 +8,7 @@ async function users(fastify: FastifyInstance) {
         {
             onRequest: [
                 fastify.authenticate,
-                fastify.authorize(3)
+                fastify.authorize(2)
             ]
         },
         async () => {

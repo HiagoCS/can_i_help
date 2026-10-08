@@ -1,0 +1,226 @@
+﻿.cashier-sales-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+
+    display: grid;
+    place-items: center;
+
+    padding: clamp(0.75rem, 4vw, 2rem);
+
+    background: rgba(0, 0, 0, 0.42);
+}
+
+.cashier-sales-modal {
+    width: min(62.25rem, 100%);
+    max-height: min(76vh, 48rem);
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+
+    padding: 0.45rem clamp(1rem, 2.5vw, 1.8rem) 1rem;
+
+    border-radius: 0.35rem;
+
+    background: #ffffff;
+    color: #5c5c5c;
+}
+
+.cashier-sales-modal__header {
+    min-height: 4.2rem;
+    flex: 0 0 auto;
+
+    position: relative;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    h2 {
+        margin: 0;
+
+        font-family: "Quicksand-Bold", sans-serif;
+        font-size: clamp(1.25rem, 2.2vw, 1.8rem);
+        font-weight: 700;
+        text-align: center;
+    }
+}
+
+.cashier-sales-modal__close {
+    width: 2.55rem;
+    height: 2.55rem;
+
+    position: absolute;
+    top: 0;
+    right: -0.45rem;
+
+    display: grid;
+    place-items: center;
+
+    padding: 0;
+
+    border: 2px solid #b8d3e7;
+    border-radius: 0.2rem;
+
+    background: #ffffff;
+    color: #c8c8c8;
+
+    font-family: Arial, sans-serif;
+    font-size: 2rem;
+    line-height: 1;
+
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+        border-color: #71a9d0;
+        color: #737373;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #1478ed;
+        outline-offset: 2px;
+    }
+}
+
+.cashier-sales-modal__body {
+    min-height: 4.5rem;
+    overflow-y: auto;
+}
+
+.cashier-sales-modal__message {
+    margin: 0;
+    padding: 1.25rem 0.4rem;
+
+    color: #5c5c5c;
+    text-align: center;
+}
+
+.cashier-sales-modal__message--error {
+    color: #791b14;
+}
+
+.cashier-sales-modal__row {
+    min-height: 4.2rem;
+
+    display: grid;
+    grid-template-columns: minmax(10rem, 1.1fr) minmax(8rem, 1fr) minmax(7rem, 0.75fr) auto;
+    align-items: center;
+    gap: clamp(0.5rem, 1.4vw, 1.2rem);
+
+    padding: 0.55rem 0.4rem;
+
+    border-bottom: 1px solid #e6e6e6;
+}
+
+.cashier-sales-modal__identity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+
+    font-size: 0.9rem;
+    text-align: center;
+
+    time {
+        white-space: nowrap;
+    }
+}
+
+.cashier-sales-modal__client {
+    min-width: 0;
+
+    overflow-wrap: anywhere;
+
+    font-size: 0.95rem;
+}
+
+.cashier-sales-modal__total {
+    font-size: 0.95rem;
+    font-weight: 400;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cashier-sales-modal__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.cashier-sales-modal__action {
+    min-height: 2.2rem;
+
+    padding: 0.35rem 0.55rem;
+
+    border: 1px solid currentColor;
+    border-radius: 0.2rem;
+
+    background: #ffffff;
+
+    font-family: "Quicksand-Regular", sans-serif;
+    font-size: 0.76rem;
+    white-space: nowrap;
+
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.cashier-sales-modal__action--pdf {
+    color: #0872f9;
+}
+
+.cashier-sales-modal__action--xml {
+    color: #6c757d;
+}
+
+.cashier-sales-modal__action--delete {
+    color: #dc3545;
+}
+
+@media (max-width: 760px) {
+    .cashier-sales-modal {
+        max-height: 82vh;
+        padding-right: 0.8rem;
+        padding-left: 0.8rem;
+    }
+
+    .cashier-sales-modal__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: 0.45rem;
+    }
+
+    .cashier-sales-modal__identity {
+        align-items: flex-start;
+        text-align: left;
+    }
+
+    .cashier-sales-modal__client {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .cashier-sales-modal__total {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .cashier-sales-modal__actions {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 420px) {
+    .cashier-sales-modal__actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cashier-sales-modal__action {
+        width: 100%;
+    }
+}

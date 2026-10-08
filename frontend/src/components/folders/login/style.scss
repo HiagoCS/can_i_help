@@ -1,0 +1,177 @@
+.login-page {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
+
+    display: grid;
+    place-items: center;
+
+    padding: clamp(1rem, 4vw, 2.5rem);
+
+    background:
+        linear-gradient(
+            105deg,
+            #ff9915 0%,
+            #d1a15d 52%,
+            #6eafd5 100%
+        );
+}
+
+.login-card {
+    width: min(100%, 26.25rem);
+    overflow: hidden;
+
+    border: 4px solid #000000;
+    border-radius: 0.3rem;
+
+    background: #70c9d2;
+}
+
+.login-card__header {
+    min-height: 3.7rem;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0.6rem 1rem;
+
+    background: #ff9915;
+}
+
+.login-card__title {
+    margin: 0;
+
+    color: #ffffff;
+
+    font-family: "Quicksand-Bold-Oblique", sans-serif;
+    font-size: clamp(1.5rem, 5vw, 2.35rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.035em;
+    text-align: center;
+    text-transform: uppercase;
+
+    -webkit-text-stroke: 1px #000000;
+    text-shadow: 2px 2px 0 #000000;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+
+    padding: 1.25rem;
+}
+
+.login-form__field {
+    width: 100%;
+    min-width: 0;
+    min-height: 3.35rem;
+
+    padding: 0.75rem 1rem;
+
+    border: 3px solid #000000;
+    border-radius: 0.3rem;
+
+    background: #ffffff;
+    color: #171717;
+
+    font-family: "Quicksand-Regular", sans-serif;
+    font-size: 1.05rem;
+
+    &::placeholder {
+        color: #171717;
+        opacity: 1;
+    }
+
+    &:focus-visible {
+        outline: 3px solid #ffffff;
+        outline-offset: 2px;
+    }
+}
+
+.login-form__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.login-form__submit {
+    min-width: 6.9rem;
+    min-height: 2.65rem;
+
+    padding: 0.65rem 1.25rem;
+
+    border: 0;
+    border-radius: 0.3rem;
+
+    background: #168b53;
+    color: #ffffff;
+
+    font-family: "Quicksand-Bold", sans-serif;
+    font-size: 0.95rem;
+
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease;
+
+    &:hover:not(:disabled) {
+        transform: translateY(-2px);
+        background: #117744;
+    }
+
+    &:focus-visible {
+        outline: 3px solid #000000;
+        outline-offset: 2px;
+    }
+
+    &:disabled {
+        cursor: wait;
+        opacity: 0.7;
+    }
+}
+
+.login-form__recovery {
+    color: #075cff;
+
+    font-family: "Quicksand-Bold", sans-serif;
+    font-size: clamp(0.75rem, 3.5vw, 0.9rem);
+    text-align: right;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+
+    &:focus-visible {
+        outline: 2px solid #000000;
+        outline-offset: 3px;
+    }
+}
+
+.login-message {
+    margin: -0.5rem 0 0;
+
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.login-message--error {
+    color: #791b14;
+}
+
+.login-message--notice {
+    color: #183b41;
+}
+
+.visually-hidden {
+    position: absolute;
+
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+}

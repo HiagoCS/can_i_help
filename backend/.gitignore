@@ -31,6 +31,11 @@ out/
 # Drizzle local/generated data
 .drizzle/
 src/db/migrations/
+!src/db/migrations/
+!src/db/migrations/20261008051321_black_maginty/
+!src/db/migrations/20261008051321_black_maginty/**
+!src/db/migrations/20261008054733_dapper_silver_centurion/
+!src/db/migrations/20261008054733_dapper_silver_centurion/**
 
 # Storage generated/uploaded files
 ./storage/

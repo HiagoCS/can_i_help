@@ -1,0 +1,72 @@
+@font-face {
+    font-family: 'Nauticus Sans';
+    src: url('NauticusSans.eot');
+    src: local('Nauticus Sans'), local('NauticusSans'),
+        url('NauticusSans.eot?#iefix') format('embedded-opentype'),
+        url('NauticusSans.woff2') format('woff2'),
+        url('NauticusSans.woff') format('woff'),
+        url('NauticusSans.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nauticus Script';
+    src: url('NauticusScript-Bold.eot');
+    src: local('Nauticus Script Bold'), local('NauticusScript-Bold'),
+        url('NauticusScript-Bold.eot?#iefix') format('embedded-opentype'),
+        url('NauticusScript-Bold.woff2') format('woff2'),
+        url('NauticusScript-Bold.woff') format('woff'),
+        url('NauticusScript-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nauticus Sans';
+    src: url('NauticusSans-Thin.eot');
+    src: local('Nauticus Sans Thin'), local('NauticusSans-Thin'),
+        url('NauticusSans-Thin.eot?#iefix') format('embedded-opentype'),
+        url('NauticusSans-Thin.woff2') format('woff2'),
+        url('NauticusSans-Thin.woff') format('woff'),
+        url('NauticusSans-Thin.ttf') format('truetype');
+    font-weight: 100;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nauticus Sans Press';
+    src: url('NauticusSansPress-Bold.eot');
+    src: local('Nauticus Sans Press Bold'), local('NauticusSansPress-Bold'),
+        url('NauticusSansPress-Bold.eot?#iefix') format('embedded-opentype'),
+        url('NauticusSansPress-Bold.woff2') format('woff2'),
+        url('NauticusSansPress-Bold.woff') format('woff'),
+        url('NauticusSansPress-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nauticus Sans';
+    src: url('NauticusSans-Bold.eot');
+    src: local('Nauticus Sans Bold'), local('NauticusSans-Bold'),
+        url('NauticusSans-Bold.eot?#iefix') format('embedded-opentype'),
+        url('NauticusSans-Bold.woff2') format('woff2'),
+        url('NauticusSans-Bold.woff') format('woff'),
+        url('NauticusSans-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Nauticus Script';
+    src: url('NauticusScript.eot');
+    src: local('Nauticus Script'), local('NauticusScript'),
+        url('NauticusScript.eot?#iefix') format('embedded-opentype'),
+        url('NauticusScript.woff2') format('woff2'),
+        url('NauticusScript.woff') format('woff'),
+        url('NauticusScript.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+

@@ -1,0 +1,27 @@
+@use "@/styles/fonts/fonts.scss" as *;
+*{
+  box-sizing:border-box;
+}
+html,
+body,
+#root{
+  width:100%;
+  max-width:100%;
+  margin:0;
+  padding:0;
+}
+html,
+body{
+  overflow-x:hidden;
+}
+:root{
+  min-width:320px;
+  @media (max-width: 320px){
+    body{
+      display:none;
+    }
+  }
+}
+body {
+  font-family: "Quicksand-Regular";
+}
