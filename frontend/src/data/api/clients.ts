@@ -166,7 +166,7 @@ export function getClients(
 
     return requestData<ClientRecord[]>(
         "/api/clients" + (suffix ? "?" + suffix : ""),
-        { signal }
+        signal !== undefined ? { signal } : {}
     );
 }
 
@@ -197,6 +197,6 @@ export function getClientReports(
 
     return requestData<ClientReportRecord[]>(
         "/api/clients/reports" + (suffix ? "?" + suffix : ""),
-        { signal }
+        signal !== undefined ? { signal } : {}
     );
 }

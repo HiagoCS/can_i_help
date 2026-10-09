@@ -3,11 +3,85 @@ import type { FastifyInstance } from "fastify";
 const { sqlite } = require("../../../db/index");
 
 async function services(fastify: FastifyInstance) {
+    /* ---------------------------------------------------------------------- */
+    /* Consultas auxiliares                                                   */
+    /* ---------------------------------------------------------------------- */
 
-    // ============================================================
-    // GET SERVICE REPORTS
-    // GET /services/reports?from=YYYY-MM-DD&to=YYYY-MM-DD
-    // ============================================================
+    /**
+     * Busca os produtos associados a um serviço.
+     */
+    const getProducts = sqlite.prepare(`
+        SELECT
+            p.id AS product_id,
+            p.sm_code,
+            p.bar_code,
+            p.name,
+            p.description,
+            p.value,
+            p.cost,
+            p.amount,
+            um.unity AS unit_measure,
+            ss.qunt
+        FROM stock_service ss
+        INNER JOIN products p
+            ON p.id = ss.product_id
+        LEFT JOIN un_measure um
+            ON um.id = p.unit_id
+        WHERE ss.service_id = ?
+        ORDER BY p.name COLLATE NOCASE ASC
+    `);
+
+    /**
+     * Formata o serviço com seus produtos e calcula seu valor.
+     *
+     * Valor do serviço = custo do serviço + valor dos produtos associados.
+     */
+    function formatService(service: any) {
+        const products = getProducts.all(service.id) as any[];
+
+        const productsValue = products.reduce(
+            (total: number, product: any) => {
+                const value = Number(product.value) || 0;
+                const quantity = Number(product.qunt) || 0;
+
+                return total + value * quantity;
+            },
+            0
+        );
+
+        const serviceCost = Number(service.cost) || 0;
+
+        const value = Number(
+            (serviceCost + productsValue).toFixed(2)
+        );
+
+        return {
+            ...service,
+            value: value.toFixed(2),
+            products
+        };
+    }
+
+    /**
+     * Consulta os dados básicos de um serviço pelo ID.
+     */
+    const getServiceById = sqlite.prepare(`
+        SELECT
+            id,
+            sm_code,
+            bar_code,
+            name,
+            description,
+            cost,
+            status
+        FROM services
+        WHERE id = ?
+    `);
+
+    /* ---------------------------------------------------------------------- */
+    /* GET SERVICE REPORTS                                                    */
+    /* GET /services/reports?from=YYYY-MM-DD&to=YYYY-MM-DD                    */
+    /* ---------------------------------------------------------------------- */
 
     fastify.get(
         "/services/reports",
@@ -15,7 +89,6 @@ async function services(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async (request, reply) => {
-
             const { from, to } = (
                 request.query ?? {}
             ) as {
@@ -33,7 +106,7 @@ async function services(fastify: FastifyInstance) {
                 }
 
                 const date = new Date(
-                    value + "T00:00:00.000Z"
+                    `${value}T00:00:00.000Z`
                 );
 
                 return (
@@ -72,17 +145,21 @@ async function services(fastify: FastifyInstance) {
             }
 
             const dateClause = dateFilters.length
-                ? " AND " + dateFilters.join(" AND ")
+                ? ` AND ${dateFilters.join(" AND ")}`
                 : "";
 
             /*
-             * Valor atual de venda do serviço:
+             * Valor atual estimado do serviço:
              *
              * services.cost + Σ(produto.value × quantidade)
              *
              * Custo atual estimado dos materiais:
              *
              * Σ(produto.cost × quantidade)
+             *
+             * stock_sale não possui uma coluna dedicada ao custo
+             * histórico do serviço. Por isso, o custo histórico
+             * é sinalizado como não confirmado.
              */
             const data = sqlite
                 .prepare(`
@@ -193,12 +270,6 @@ async function services(fastify: FastifyInstance) {
                             0
                         ) AS sales_cost,
 
-                        /*
-                         * stock_sale não possui uma coluna
-                         * dedicada ao custo histórico do serviço.
-                         * Cada item vendido é contabilizado como
-                         * custo histórico não confirmado.
-                         */
                         COUNT(
                             CASE
                                 WHEN c.id IS NOT NULL
@@ -234,11 +305,10 @@ async function services(fastify: FastifyInstance) {
         }
     );
 
-
-    // ============================================================
-    // GET ALL SERVICES
-    // Cada serviço retorna os produtos associados e seu valor.
-    // ============================================================
+    /* ---------------------------------------------------------------------- */
+    /* GET ALL SERVICES                                                       */
+    /* GET /services                                                          */
+    /* ---------------------------------------------------------------------- */
 
     fastify.get(
         "/services",
@@ -246,8 +316,7 @@ async function services(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async () => {
-
-            const services = sqlite
+            const records = sqlite
                 .prepare(`
                     SELECT
                         id,
@@ -262,55 +331,9 @@ async function services(fastify: FastifyInstance) {
                 `)
                 .all() as any[];
 
-            const getProducts = sqlite.prepare(`
-                SELECT
-                    p.id AS product_id,
-                    p.sm_code,
-                    p.bar_code,
-                    p.name,
-                    p.description,
-                    p.value,
-                    p.cost,
-                    p.amount,
-                    um.unity AS unit_measure,
-                    ss.qunt
-                FROM stock_service ss
-                INNER JOIN products p
-                    ON p.id = ss.product_id
-                LEFT JOIN un_measure um
-                    ON um.id = p.unit_id
-                WHERE ss.service_id = ?
-                ORDER BY p.name COLLATE NOCASE ASC
-            `);
-
-            const data = services.map((service) => {
-
-                const products = getProducts.all(
-                    service.id
-                ) as any[];
-
-                const productsValue = products.reduce(
-                    (total: number, product: any) => {
-                        const value = Number(product.value) || 0;
-                        const quantity = Number(product.qunt) || 0;
-
-                        return total + (value * quantity);
-                    },
-                    0
-                );
-
-                const serviceCost = Number(service.cost) || 0;
-
-                const value = Number(
-                    (serviceCost + productsValue).toFixed(2)
-                );
-
-                return {
-                    ...service,
-                    value: value.toFixed(2),
-                    products
-                };
-            });
+            const data = records.map((service: any) =>
+                formatService(service)
+            );
 
             return {
                 message: "Successful Request",
@@ -319,11 +342,91 @@ async function services(fastify: FastifyInstance) {
         }
     );
 
+    /* ---------------------------------------------------------------------- */
+    /* SEARCH SERVICES                                                        */
+    /*                                                                          */
+    /* GET /service/name/:query                                               */
+    /* GET /service/smcode/:query                                             */
+    /* GET /service/barcode/:query                                            */
+    /* ---------------------------------------------------------------------- */
 
-    // ============================================================
-    // GET SERVICE BY ID
-    // Retorna um serviço específico com seus produtos.
-    // ============================================================
+    const serviceSearchRoutes = [
+        {
+            url: "/service/name/:query",
+            column: "name"
+        },
+        {
+            url: "/service/smcode/:query",
+            column: "sm_code"
+        },
+        {
+            url: "/service/barcode/:query",
+            column: "bar_code"
+        }
+    ] as const;
+
+    for (const route of serviceSearchRoutes) {
+        fastify.get(
+            route.url,
+            {
+                onRequest: [fastify.authenticate]
+            },
+            async (request, reply) => {
+                const { query } = request.params as {
+                    query: string;
+                };
+
+                const normalizedQuery = query?.trim();
+
+                if (!normalizedQuery) {
+                    return reply.code(400).send({
+                        message: "Informe um termo para pesquisar serviços.",
+                        data: []
+                    });
+                }
+
+                /*
+                 * O nome da coluna vem exclusivamente da lista
+                 * fixa acima. O conteúdo pesquisado é passado
+                 * como parâmetro SQL.
+                 *
+                 * A busca parcial permite localizar registros
+                 * mesmo quando o usuário informa apenas parte
+                 * do nome ou código.
+                 */
+                const records = sqlite
+                    .prepare(`
+                        SELECT
+                            id,
+                            sm_code,
+                            bar_code,
+                            name,
+                            description,
+                            cost,
+                            status
+                        FROM services
+                        WHERE COALESCE(${route.column}, '')
+                            LIKE ? COLLATE NOCASE
+                        ORDER BY name COLLATE NOCASE ASC
+                    `)
+                    .all(`%${normalizedQuery}%`) as any[];
+
+                const data = records.map((service: any) =>
+                    formatService(service)
+                );
+
+                return {
+                    message: "Successful Request",
+                    data
+                };
+            }
+        );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* GET SERVICE BY ID                                                      */
+    /* GET /service/:id                                                       */
+    /* ---------------------------------------------------------------------- */
 
     fastify.get(
         "/service/:id",
@@ -331,31 +434,19 @@ async function services(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async (request, reply) => {
-
             const id = Number(
                 (request.params as { id: string }).id
             );
 
-            if (!Number.isInteger(id) || id <= 0) {
+            if (!Number.isSafeInteger(id) || id <= 0) {
                 return reply.code(400).send({
                     message: "Invalid service ID"
                 });
             }
 
-            const service = sqlite
-                .prepare(`
-                    SELECT
-                        id,
-                        sm_code,
-                        bar_code,
-                        name,
-                        description,
-                        cost,
-                        status
-                    FROM services
-                    WHERE id = ?
-                `)
-                .get(id) as any;
+            const service = getServiceById.get(id) as
+                | Record<string, unknown>
+                | undefined;
 
             if (!service) {
                 return reply.code(404).send({
@@ -363,56 +454,12 @@ async function services(fastify: FastifyInstance) {
                 });
             }
 
-            const products = sqlite
-                .prepare(`
-                    SELECT
-                        p.id AS product_id,
-                        p.sm_code,
-                        p.bar_code,
-                        p.name,
-                        p.description,
-                        p.value,
-                        p.cost,
-                        p.amount,
-                        um.unity AS unit_measure,
-                        ss.qunt
-                    FROM stock_service ss
-                    INNER JOIN products p
-                        ON p.id = ss.product_id
-                    LEFT JOIN un_measure um
-                        ON um.id = p.unit_id
-                    WHERE ss.service_id = ?
-                    ORDER BY p.name COLLATE NOCASE ASC
-                `)
-                .all(id) as any[];
-
-            const productsValue = products.reduce(
-                (total: number, product: any) => {
-                    const value = Number(product.value) || 0;
-                    const quantity = Number(product.qunt) || 0;
-
-                    return total + (value * quantity);
-                },
-                0
-            );
-
-            const serviceCost = Number(service.cost) || 0;
-
-            const value = Number(
-                (serviceCost + productsValue).toFixed(2)
-            );
-
             return {
                 message: "Successful Request",
-                data: {
-                    ...service,
-                    value: value.toFixed(2),
-                    products
-                }
+                data: formatService(service)
             };
         }
     );
-
 }
 
 module.exports = services;

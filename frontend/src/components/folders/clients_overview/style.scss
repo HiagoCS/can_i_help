@@ -79,6 +79,7 @@
     }
 
     input {
+        box-sizing: border-box;
         width: 100%;
         min-width: 0;
         height: 2.45rem;
@@ -219,20 +220,40 @@
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/* CARDS DE DETALHES                                                          */
+/* -------------------------------------------------------------------------- */
+
 .clients-overview__details {
     min-width: 0;
+
     display: grid;
     grid-template-columns:
         minmax(13rem, 0.8fr)
         minmax(17rem, 1fr)
         minmax(20rem, 1.5fr);
-    align-items: stretch;
+
+    /*
+     * Cada card mantém sua própria altura.
+     * O grid não força os itens a preencherem a altura da linha.
+     */
+    align-items: start;
+
     gap: 0.55rem;
 }
 
 .clients-overview__card {
+    box-sizing: border-box;
     min-width: 0;
     min-height: 12rem;
+
+    /*
+     * Impede que o card seja esticado para acompanhar
+     * o card mais alto da mesma linha.
+     */
+    align-self: start;
+    height: fit-content;
+
     padding: clamp(0.75rem, 1.2vw, 1.25rem);
     border: 2px solid #000;
     border-radius: 0.35rem;
@@ -303,6 +324,19 @@
     font-size: 0.75rem;
     font-weight: 700;
 }
+.clients-overview__client-edit {
+    align-self: flex-start;
+    padding: 0.35rem 0.8rem;
+    border-radius: 1rem;
+    background: #eea300;
+    color: #000000;
+    font-size: 0.75rem;
+    font-weight: 700;
+    transition: all 0.2s ease-in-out;
+    &:hover{
+        color: #fffdfd;
+    }
+}
 
 .clients-overview__card--summary {
     display: flex;
@@ -354,6 +388,9 @@
 
 .clients-overview__card--history {
     min-height: 12rem;
+    align-self: start;
+    height: fit-content;
+
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -382,6 +419,7 @@
 }
 
 .clients-overview__purchase {
+    box-sizing: border-box;
     min-width: 0;
     padding: 0.75rem;
     border: 1px solid #c4cdd1;
@@ -483,7 +521,7 @@
 }
 
 .clients-overview__empty-details {
-    margin: auto 0;
+    margin: 0;
     color: #536673;
     font-size: 0.85rem;
     line-height: 1.5;
@@ -491,7 +529,7 @@
 }
 
 .clients-overview__card-empty {
-    margin: auto 0;
+    margin: 0;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
@@ -518,6 +556,10 @@
     font-weight: 700;
 }
 
+/* -------------------------------------------------------------------------- */
+/* RESPONSIVIDADE                                                             */
+/* -------------------------------------------------------------------------- */
+
 @media (max-width: 1100px) {
     .clients-overview__content {
         padding-inline: 1rem;
@@ -529,6 +571,7 @@
 
     .clients-overview__details {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
     }
 
     .clients-overview__card--history {
@@ -552,6 +595,7 @@
     .clients-overview__toolbar,
     .clients-overview__details {
         grid-template-columns: minmax(0, 1fr);
+        align-items: start;
     }
 
     .clients-overview__clear-button {
@@ -559,11 +603,17 @@
     }
 
     .clients-overview__card {
+        width: 100%;
         min-height: 9rem;
+        align-self: start;
+        height: fit-content;
     }
 
     .clients-overview__card--history {
         grid-column: auto;
+        min-height: 9rem;
+        align-self: start;
+        height: fit-content;
     }
 
     .clients-overview__summary-grid {

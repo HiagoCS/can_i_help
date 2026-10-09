@@ -3,6 +3,7 @@ const users = require("./user/index");
 const roles = require("./roles/index");
 const products = require("./products/index");
 const services = require("./services/index");
+const cashier = require("./cashier/index");
 const paymentMethods = require("./payment_methods/index");
 const installments = require("./installments/index");
 async function deleteRoute(fastify: FastifyInstance) {
@@ -10,6 +11,7 @@ async function deleteRoute(fastify: FastifyInstance) {
     await roles(fastify);
     await products(fastify);
     await services(fastify);
+    await cashier(fastify);
     await paymentMethods(fastify);
     await installments(fastify);
     fastify.delete("/", async () => {

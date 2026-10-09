@@ -2,13 +2,35 @@ import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
 
+
+function normalizeDigits(value: string): string {
+    return value.replace(/\D/g, "");
+}
+
+function isValidDate(value?: string): boolean {
+    if (!value) {
+        return true;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+    }
+
+    const date = new Date(`${value}T00:00:00.000Z`);
+
+    return (
+        !Number.isNaN(date.getTime()) &&
+        date.toISOString().slice(0, 10) === value
+    );
+}
+
 async function clients(fastify: FastifyInstance) {
 
     // ============================================================
     // GET CLIENTS REPORTS
     // GET /clients/reports?search=&from=YYYY-MM-DD&to=YYYY-MM-DD
     //
-    // Retorna os clientes, suas vendas e os itens comprados.
+    // Retorna clientes, vendas e itens comprados.
     // ============================================================
 
     fastify.get(
@@ -17,7 +39,6 @@ async function clients(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async (request, reply) => {
-
             const {
                 search: searchQuery,
                 from,
@@ -30,31 +51,8 @@ async function clients(fastify: FastifyInstance) {
 
             const query = String(searchQuery ?? "").trim();
             const search = `%${query}%`;
-            const queryDigits = query.replace(/\D/g, "");
+            const queryDigits = normalizeDigits(query);
             const digitsSearch = `%${queryDigits}%`;
-
-            // ----------------------------------------------------
-            // VALIDATE DATE RANGE
-            // ----------------------------------------------------
-
-            const isValidDate = (value?: string) => {
-                if (!value) {
-                    return true;
-                }
-
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                    return false;
-                }
-
-                const date = new Date(
-                    value + "T00:00:00.000Z"
-                );
-
-                return (
-                    !Number.isNaN(date.getTime()) &&
-                    date.toISOString().slice(0, 10) === value
-                );
-            };
 
             if (
                 !isValidDate(from) ||
@@ -67,38 +65,25 @@ async function clients(fastify: FastifyInstance) {
             }
 
             // ----------------------------------------------------
-            // DATE FILTERS
-            //
-            // Applied to the LEFT JOIN so clients without sales
-            // in the selected period are still returned.
+            // FILTRO DE DATA APLICADO AO LEFT JOIN
             // ----------------------------------------------------
 
             const dateFilters: string[] = [];
             const dateParams: string[] = [];
 
             if (from) {
-                dateFilters.push(
-                    "date(c.dt_sale) >= date(?)"
-                );
-
+                dateFilters.push("date(c.dt_sale) >= date(?)");
                 dateParams.push(from);
             }
 
             if (to) {
-                dateFilters.push(
-                    "date(c.dt_sale) <= date(?)"
-                );
-
+                dateFilters.push("date(c.dt_sale) <= date(?)");
                 dateParams.push(to);
             }
 
             const dateClause = dateFilters.length
                 ? " AND " + dateFilters.join(" AND ")
                 : "";
-
-            // ----------------------------------------------------
-            // QUERY PARAMETERS
-            // ----------------------------------------------------
 
             const searchParams = [
                 query,
@@ -112,7 +97,7 @@ async function clients(fastify: FastifyInstance) {
             ];
 
             // ----------------------------------------------------
-            // REPORT QUERY
+            // CONSULTA DO RELATÓRIO
             // ----------------------------------------------------
 
             const rows = sqlite
@@ -157,11 +142,6 @@ async function clients(fastify: FastifyInstance) {
                             ELSE 'unknown'
                         END AS item_type,
 
-                        /*
-                         * Use o valor salvo no item da venda.
-                         * Quando estiver nulo, utiliza o valor
-                         * cadastrado atualmente como alternativa.
-                         */
                         COALESCE(
                             CAST(ss.value AS REAL),
 
@@ -283,39 +263,32 @@ async function clients(fastify: FastifyInstance) {
                 ) as any[];
 
             // ----------------------------------------------------
-            // GROUP CLIENTS -> SALES -> ITEMS
+            // AGRUPAR CLIENTES -> VENDAS -> ITENS
             // ----------------------------------------------------
 
             const clientsMap = new Map<number, any>();
 
             for (const row of rows) {
+                const clientId = Number(row.client_id);
 
-                let client = clientsMap.get(
-                    Number(row.client_id)
-                );
+                let client = clientsMap.get(clientId);
 
                 if (!client) {
                     client = {
-                        id: Number(row.client_id),
+                        id: clientId,
                         name: row.client_name,
                         cpf: row.cpf,
                         cnpj: row.cnpj,
-
                         purchase_count: 0,
                         items_bought_count: 0,
                         total_spent: 0,
-
                         purchases: [],
                         _sales: new Map<number, any>()
                     };
 
-                    clientsMap.set(
-                        client.id,
-                        client
-                    );
+                    clientsMap.set(clientId, client);
                 }
 
-                // Client exists, but has no sales in this period.
                 if (row.sale_id == null) {
                     continue;
                 }
@@ -333,17 +306,12 @@ async function clients(fastify: FastifyInstance) {
                         items: []
                     };
 
-                    client._sales.set(
-                        saleId,
-                        purchase
-                    );
-
+                    client._sales.set(saleId, purchase);
                     client.purchases.push(purchase);
                     client.purchase_count += 1;
                     client.total_spent += purchase.total_value;
                 }
 
-                // A sale can exist without item rows.
                 if (row.sale_item_id == null) {
                     continue;
                 }
@@ -351,9 +319,8 @@ async function clients(fastify: FastifyInstance) {
                 const quantity = Number(row.quantity) || 0;
                 const unitValue = Number(row.item_unit_value) || 0;
 
-                const item = {
+                purchase.items.push({
                     id: Number(row.sale_item_id),
-
                     type: row.item_type,
 
                     item_id: row.product_id != null
@@ -377,31 +344,19 @@ async function clients(fastify: FastifyInstance) {
                     quantity,
                     unit_measure: row.unit_measure ?? "UN",
 
-                    unit_value: Number(
-                        unitValue.toFixed(2)
-                    ),
+                    unit_value: Number(unitValue.toFixed(2)),
 
                     total_value: Number(
                         (unitValue * quantity).toFixed(2)
                     )
-                };
+                });
 
-                purchase.items.push(item);
                 client.items_bought_count += quantity;
             }
-
-            // ----------------------------------------------------
-            // FINALIZE RESPONSE
-            // ----------------------------------------------------
 
             const data = Array.from(
                 clientsMap.values()
             ).map((client) => {
-
-                const purchases = client.purchases.map(
-                    (purchase: any) => purchase
-                );
-
                 const {
                     _sales,
                     ...clientData
@@ -412,7 +367,7 @@ async function clients(fastify: FastifyInstance) {
                     total_spent: Number(
                         client.total_spent.toFixed(2)
                     ),
-                    purchases
+                    purchases: client.purchases
                 };
             });
 
@@ -423,12 +378,76 @@ async function clients(fastify: FastifyInstance) {
         }
     );
 
+    // ============================================================
+    // GET CLIENT BY ID
+    // GET /clients/:clientId
+    //
+    // Retorna os dados cadastrais para a página de edição.
+    // method_id é deliberadamente omitido.
+    // ============================================================
 
+    fastify.get(
+        "/clients/:clientId",
+        {
+            onRequest: [fastify.authenticate]
+        },
+        async (request, reply) => {
+            const { clientId: clientIdParam } = request.params as {
+                clientId: string;
+            };
+
+            const clientId = Number(clientIdParam);
+
+            if (
+                !Number.isSafeInteger(clientId) ||
+                clientId <= 0
+            ) {
+                return reply.code(400).send({
+                    message: "O identificador do cliente é inválido."
+                });
+            }
+
+            const client = sqlite
+                .prepare(`
+                    SELECT
+                        id,
+                        name,
+                        cpf,
+                        cnpj,
+                        ie,
+                        address,
+                        number,
+                        complement,
+                        neighborhood,
+                        city,
+                        city_ibge,
+                        state,
+                        zip_code
+                    FROM clients
+                    WHERE id = ?
+                    LIMIT 1
+                `)
+                .get(clientId);
+
+            if (!client) {
+                return reply.code(404).send({
+                    message: "Cliente não encontrado."
+                });
+            }
+
+            return {
+                message: "Successful Request",
+                data: client
+            };
+        }
+    );
+
+    
     // ============================================================
     // GET CLIENTS
     // GET /clients?search=
     //
-    // Mantém a consulta atual para a tela de clientes.
+    // Listagem resumida para a tela de clientes.
     // ============================================================
 
     fastify.get(
@@ -437,14 +456,13 @@ async function clients(fastify: FastifyInstance) {
             onRequest: [fastify.authenticate]
         },
         async (request) => {
-
             const query = String(
                 (request.query as { search?: string })?.search ?? ""
             ).trim();
 
-            const search = "%" + query + "%";
-            const queryDigits = query.replace(/\D/g, "");
-            const digitsSearch = "%" + queryDigits + "%";
+            const search = `%${query}%`;
+            const queryDigits = normalizeDigits(query);
+            const digitsSearch = `%${queryDigits}%`;
 
             const data = sqlite
                 .prepare(`
@@ -514,7 +532,6 @@ async function clients(fastify: FastifyInstance) {
             };
         }
     );
-
 }
 
 module.exports = clients;

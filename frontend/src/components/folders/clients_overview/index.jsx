@@ -232,10 +232,10 @@ export default function ClientsOverviewPage() {
     const selectedTotals = getClientTotals(selectedReport);
     const purchases = Array.isArray(selectedReport?.purchases)
         ? [...selectedReport.purchases].sort(
-              (a, b) =>
-                  new Date(b.dt_sale).getTime() -
-                  new Date(a.dt_sale).getTime()
-          )
+            (a, b) =>
+                new Date(b.dt_sale).getTime() -
+                new Date(a.dt_sale).getTime()
+        )
         : [];
 
     useEffect(() => {
@@ -398,7 +398,7 @@ export default function ClientsOverviewPage() {
                                             className={[
                                                 "clients-overview__row",
                                                 Number(selectedId) ===
-                                                Number(client.id)
+                                                    Number(client.id)
                                                     ? "is-selected"
                                                     : ""
                                             ]
@@ -510,8 +510,17 @@ export default function ClientsOverviewPage() {
                                     </strong>
                                 </div>
 
-                                <div className="clients-overview__client-note">
-                                    Cadastro de cliente
+                                <div className="clients-overview__personal-footer" style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", alignItems: "center" }}>
+                                    <div className="clients-overview__client-note">
+                                        Cadastro de cliente
+                                    </div>
+                                    <div className="clients-overview__client-edit"
+                                        onClick={() => {
+                                            window.location.href = `/clientes/editar/${selected.id}`;
+                                        }}
+                                    >
+                                        Editar
+                                    </div>
                                 </div>
                             </>
                         ) : (
@@ -636,7 +645,7 @@ export default function ClientsOverviewPage() {
                                         </div>
 
                                         {Array.isArray(purchase.items) &&
-                                        purchase.items.length > 0 ? (
+                                            purchase.items.length > 0 ? (
                                             <div className="clients-overview__purchase-items">
                                                 {purchase.items.map((item) => (
                                                     <div

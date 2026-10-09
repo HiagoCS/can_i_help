@@ -153,7 +153,7 @@ function CashierFinalizationModal({
                                 type="button"
                                 onClick={() => onDownloadXml(sale)}
                             >
-                                Baixar XML
+                                Baixar Cupom Fiscal
                             </button>
                             {sale?.fiscal_data_complete && (
                                 <button

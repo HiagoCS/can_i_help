@@ -1,3 +1,5 @@
+import { getCashierSalePdf } from "@/data/api/cashier";
+
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL"
@@ -9,164 +11,602 @@ function escapeMarkup(value) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
-        .replace(/'/g, "&apos;");
+        .replace(/'/g, "&#39;");
+}
+
+function parseMoney(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
 }
 
 function formatSaleDate(value) {
     const date = new Date(String(value ?? "").replace(" ", "T"));
-    if (Number.isNaN(date.getTime())) return String(value ?? "");
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value ?? "");
+    }
+
     return new Intl.DateTimeFormat("pt-BR", {
-        day: "2-digit", month: "2-digit", year: "numeric",
-        hour: "2-digit", minute: "2-digit"
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
     }).format(date);
 }
 
-function downloadFile(filename, contents, type) {
-    const blob = new Blob([contents], { type });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+function getCompanyAddress(company) {
+    return [
+        company.address,
+        company.number,
+        company.complement,
+        company.neighborhood,
+        company.city,
+        company.state,
+        company.zip_code
+    ]
+        .filter(Boolean)
+        .join(", ");
 }
 
-export function printSalePdf(sale) {
+function getCustomerAddress(customer) {
+    return [
+        customer.address,
+        customer.number,
+        customer.complement,
+        customer.neighborhood,
+        customer.city,
+        customer.state,
+        customer.zip_code
+    ]
+        .filter(Boolean)
+        .join(", ");
+}
+
+/**
+ * Abre o PDF oficial gerado pelo backend.
+ *
+ * O frontend não recria o documento: ele busca o arquivo da rota
+ * GET /api/cashier/:id/pdf e exibe o PDF retornado pelo servidor.
+ *
+ * Dessa forma, o layout, os dados e a formatação são os mesmos
+ * utilizados pelo PDF do backend.
+ *
+ * A aba é aberta antes da requisição para evitar bloqueadores
+ * de pop-up.
+ */
+export async function printSalePdf(sale) {
+    const saleId = Number(
+        typeof sale === "object" && sale !== null
+            ? sale.id
+            : sale
+    );
+
+    if (!Number.isSafeInteger(saleId) || saleId <= 0) {
+        window.alert(
+            "Não foi possível gerar o PDF: identificador de venda inválido."
+        );
+        return;
+    }
+
     const printWindow = window.open("", "_blank");
+
     if (!printWindow) {
-        window.alert("Permita a abertura de pop-ups para gerar o PDF da venda.");
+        window.alert(
+            "Permita a abertura de pop-ups para abrir o PDF da venda."
+        );
+        return;
+    }
+
+    printWindow.document.title = "Gerando PDF da venda...";
+    printWindow.document.body.textContent =
+        "Carregando o PDF gerado pelo servidor. Aguarde...";
+
+    try {
+        const file = await getCashierSalePdf(saleId);
+
+        if (!file?.blob || file.blob.size === 0) {
+            throw new Error(
+                "O servidor não retornou um PDF válido."
+            );
+        }
+
+        if (
+            file.contentType &&
+            !file.contentType.toLowerCase().includes("application/pdf")
+        ) {
+            throw new Error(
+                "O servidor retornou um documento que não é PDF."
+            );
+        }
+
+        const objectUrl = URL.createObjectURL(file.blob);
+
+        printWindow.location.replace(objectUrl);
+
+        /*
+         * Mantém o documento disponível por tempo suficiente para
+         * o visualizador do navegador carregar o PDF.
+         */
+        window.setTimeout(() => {
+            URL.revokeObjectURL(objectUrl);
+        }, 60_000);
+    } catch (error) {
+        printWindow.close();
+
+        window.alert(
+            error instanceof Error
+                ? error.message
+                : "Não foi possível carregar o PDF da venda."
+        );
+    }
+}
+
+/**
+ * Gera um cupom de venda para impressora térmica de 80 mm.
+ *
+ * Esta função é independente do PDF A4 do backend.
+ * Ela gera um comprovante gerencial, sem validade fiscal.
+ */
+export function drawCupon(sale) {
+    if (!sale || !sale.id) {
+        window.alert(
+            "Não foi possível gerar o cupom: venda inválida."
+        );
+        return;
+    }
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) {
+        window.alert(
+            "Permita a abertura de pop-ups para imprimir o cupom."
+        );
         return;
     }
 
     const company = sale.company ?? {};
     const customer = sale.customer ?? {};
-    const items = (sale.items ?? []).map((item, index) => `
-        <tr>
-            <td>${index + 1}</td>
-            <td>${escapeMarkup(item.name)}</td>
-            <td>${escapeMarkup(item.description || "—")}</td>
-            <td>${escapeMarkup(item.unitMeasure || item.unit_measure || "UN")}</td>
-            <td>${Number(item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 4 })}</td>
-            <td>${currencyFormatter.format(Number(item.unitPrice) || 0)}</td>
-            <td>${currencyFormatter.format(Number(item.total) || 0)}</td>
-        </tr>
-    `).join("");
-    const companyName = company.trade_name || company.legal_name || "Empresa não configurada";
-    const customerName = sale.client_name || "Consumidor não identificado";
-    const companyAddress = [company.address, company.number, company.complement, company.neighborhood, company.city, company.state, company.zip_code].filter(Boolean).join(", ");
-    const customerAddress = [customer.address, customer.number, customer.complement, customer.neighborhood, customer.city, customer.state, customer.zip_code].filter(Boolean).join(", ");
-    const taxIdLine = sale.client_tax_id
-        ? `<div>CPF/CNPJ: ${escapeMarkup(sale.client_tax_id)}</div>`
-        : "";
-    const surcharge = Number(sale.installment_surcharge) || 0;
+
+    const saleItems = Array.isArray(sale.items)
+        ? sale.items
+        : [];
+
+    const companyName =
+        company.trade_name ||
+        company.legal_name ||
+        "Empresa não configurada";
+
+    const customerName =
+        sale.client_name ||
+        customer.name ||
+        "Consumidor não identificado";
+
+    const companyAddress = getCompanyAddress(company);
+    const customerAddress = getCustomerAddress(customer);
+
+    const taxId =
+        sale.client_tax_id ||
+        customer.cpf ||
+        customer.cnpj;
+
+    const items = saleItems.map((item) => {
+        const quantity = parseMoney(item.quantity);
+
+        const unitPrice = parseMoney(
+            item.unitPrice ?? item.unit_price
+        );
+
+        const total = parseMoney(
+            item.total ?? quantity * unitPrice
+        );
+
+        const itemName = item.name || "Item";
+        const description = item.description || "";
+
+        const unit =
+            item.unitMeasure ||
+            item.unit_measure ||
+            "UN";
+
+        const itemType =
+            item.itemType === "service"
+                ? "Serviço"
+                : item.itemType === "product"
+                    ? "Produto"
+                    : "";
+
+        return `
+            <div class="item">
+                <div class="item-name">
+                    ${escapeMarkup(itemName)}
+                    ${
+                        itemType
+                            ? `<span>(${itemType})</span>`
+                            : ""
+                    }
+                </div>
+
+                ${
+                    description
+                        ? `
+                            <div class="item-description">
+                                ${escapeMarkup(description)}
+                            </div>
+                        `
+                        : ""
+                }
+
+                <div class="item-details">
+                    <span>
+                        ${quantity.toLocaleString("pt-BR")}
+                        ${escapeMarkup(unit)}
+                        × ${currencyFormatter.format(unitPrice)}
+                    </span>
+
+                    <strong>
+                        ${currencyFormatter.format(total)}
+                    </strong>
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    const surcharge = parseMoney(
+        sale.installment_surcharge
+    );
+
+    const discount = parseMoney(
+        sale.discount_total
+    );
+
     const installmentLine = surcharge > 0
-        ? `<tr><th>Acréscimo do parcelamento</th><td>${currencyFormatter.format(surcharge)}</td></tr>`
+        ? `
+            <div class="summary-line">
+                <span>Acréscimo parcelamento</span>
+                <span>
+                    ${currencyFormatter.format(surcharge)}
+                </span>
+            </div>
+        `
+        : "";
+
+    const discountLine = discount > 0
+        ? `
+            <div class="summary-line">
+                <span>Desconto</span>
+                <span>
+                    -${currencyFormatter.format(discount)}
+                </span>
+            </div>
+        `
         : "";
 
     printWindow.document.open();
+
     printWindow.document.write(`<!doctype html>
-        <html lang="pt-BR"><head><meta charset="utf-8"><title>Comprovante de venda ${Number(sale.id)}</title>
-        <style>
-            @page { size: A4; margin: 14mm; }
-            * { box-sizing: border-box; }
-            body { margin: 0; color: #17202a; font: 10pt Arial, sans-serif; }
-            h1 { margin: 0 0 3mm; font-size: 16pt; }
-            .notice { margin: 0 0 8mm; padding: 3mm; border: 1px solid #a33; color: #8c2020; font-weight: 700; text-align: center; }
-            .meta { margin-bottom: 6mm; line-height: 1.55; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { padding: 2.3mm 1.5mm; border: 1px solid #d5d5d5; text-align: left; vertical-align: top; }
-            th { background: #f1f1f1; }
-            .items { margin-top: 5mm; font-size: 8.5pt; }
-            .items th:nth-child(n+4), .items td:nth-child(n+4) { text-align: right; white-space: nowrap; }
-            .summary { width: min(75mm, 100%); margin: 6mm 0 0 auto; }
-            .summary th { width: 72%; font-weight: 400; }
-            .summary .total th, .summary .total td { font-weight: 700; }
-            .payment { margin-top: 22mm; }
-            footer { margin-top: 7mm; color: #637282; font-size: 8pt; }
-            @media screen { body { max-width: 190mm; margin: 14mm auto; } }
-        </style></head><body>
-        <div class="notice">COMPROVANTE DE VENDA — DOCUMENTO GERENCIAL SEM VALIDADE FISCAL</div>
-        <h1>${escapeMarkup(companyName)}</h1>
-        <div class="meta">
-            <div>CNPJ: ${escapeMarkup(company.cnpj || "Não informado")}</div>
-            <div>Inscrição estadual: ${escapeMarkup(company.state_registration || "Não informada")}</div>
-            ${companyAddress ? `<div>${escapeMarkup(companyAddress)}</div>` : ""}
-            <div><strong>Destinatário:</strong> ${escapeMarkup(customerName)}</div>
-            ${taxIdLine}
-            ${customerAddress ? `<div>Endereço: ${escapeMarkup(customerAddress)}</div>` : ""}
-            <div>Venda #${Number(sale.id)} · Emitida em: ${escapeMarkup(formatSaleDate(sale.dt_sale))}</div>
-        </div>
-        <table class="items"><thead><tr><th>#</th><th>Produto / Serviço</th><th>Descrição</th><th>Un.</th><th>Qtde</th><th>V. Unit.</th><th>V. Total</th></tr></thead><tbody>${items}</tbody></table>
-        <table class="summary"><tbody>
-            <tr><th>Total Produtos/Serviços</th><td>${currencyFormatter.format(Number(sale.product_subtotal) || 0)}</td></tr>
-            <tr><th>Descontos</th><td>${currencyFormatter.format(Number(sale.discount_total) || 0)}</td></tr>
-            ${installmentLine}
-            <tr class="total"><th>Valor total</th><td>${currencyFormatter.format(Number(sale.total_value) || 0)}</td></tr>
-        </tbody></table>
-        <div class="payment"><strong>Pagamentos</strong><table><thead><tr><th>Método</th><th>Parcelas</th><th>Valor</th></tr></thead>
-        <tbody><tr><td>${escapeMarkup(sale.payment_method_name || "Não informado")}</td><td>${sale.installment_count ? "x" + Number(sale.installment_count) : "—"}</td><td>${currencyFormatter.format(Number(sale.total_value) || 0)}</td></tr></tbody></table></div>
-        <footer>Gerado por sistema POS · Venda sem autorização da SEFAZ.</footer>
-        <script>window.addEventListener("load", () => setTimeout(() => window.print(), 250));</script>
-        </body></html>`);
+        <html lang="pt-BR">
+        <head>
+            <meta charset="utf-8">
+
+            <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1"
+            >
+
+            <title>Cupom da venda ${Number(sale.id)}</title>
+
+            <style>
+                @page {
+                    size: 80mm auto;
+                    margin: 3mm;
+                }
+
+                * {
+                    box-sizing: border-box;
+                }
+
+                html,
+                body {
+                    width: 100%;
+                    margin: 0;
+                    padding: 0;
+                }
+
+                body {
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 11px;
+                    line-height: 1.4;
+                    color: #000;
+                    background: #fff;
+                }
+
+                .coupon {
+                    width: 100%;
+                    max-width: 74mm;
+                    margin: 0 auto;
+                    overflow-wrap: anywhere;
+                }
+
+                .center {
+                    text-align: center;
+                }
+
+                .company-name {
+                    margin: 0 0 5px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+
+                .company-info {
+                    margin-bottom: 8px;
+                    font-size: 10px;
+                }
+
+                .separator {
+                    margin: 8px 0;
+                    border: 0;
+                    border-top: 1px dashed #000;
+                }
+
+                .title {
+                    margin: 7px 0;
+                    font-size: 13px;
+                    font-weight: 700;
+                    text-align: center;
+                    text-transform: uppercase;
+                }
+
+                .sale-info {
+                    font-size: 10px;
+                }
+
+                .sale-info div {
+                    margin: 2px 0;
+                }
+
+                .section-title {
+                    margin: 8px 0 5px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+
+                .item {
+                    padding: 7px 0;
+                    border-bottom: 1px dashed #999;
+                    page-break-inside: avoid;
+                }
+
+                .item-name {
+                    font-weight: 700;
+                }
+
+                .item-name span {
+                    font-size: 10px;
+                    font-weight: 400;
+                }
+
+                .item-description {
+                    margin-top: 2px;
+                    font-size: 10px;
+                }
+
+                .item-details {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 5px;
+                    margin-top: 4px;
+                }
+
+                .item-details strong {
+                    white-space: nowrap;
+                }
+
+                .summary {
+                    margin-top: 8px;
+                }
+
+                .summary-line {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 8px;
+                    margin: 4px 0;
+                }
+
+                .summary-line span:last-child {
+                    text-align: right;
+                    white-space: nowrap;
+                }
+
+                .total {
+                    margin-top: 8px;
+                    padding-top: 7px;
+                    border-top: 1px solid #000;
+                    font-size: 16px;
+                    font-weight: 700;
+                }
+
+                .payment {
+                    margin-top: 10px;
+                }
+
+                .footer {
+                    margin-top: 13px;
+                    text-align: center;
+                    font-size: 10px;
+                }
+
+                @media screen {
+                    body {
+                        padding: 8px;
+                    }
+
+                    .coupon {
+                        max-width: 74mm;
+                    }
+                }
+            </style>
+        </head>
+
+        <body>
+            <main class="coupon">
+                <header class="center">
+                    <h1 class="company-name">
+                        ${escapeMarkup(companyName)}
+                    </h1>
+
+                    <div class="company-info">
+                        ${
+                            company.cnpj
+                                ? `<div>CNPJ: ${escapeMarkup(company.cnpj)}</div>`
+                                : ""
+                        }
+
+                        ${
+                            company.state_registration
+                                ? `<div>IE: ${escapeMarkup(company.state_registration)}</div>`
+                                : ""
+                        }
+
+                        ${
+                            companyAddress
+                                ? `<div>${escapeMarkup(companyAddress)}</div>`
+                                : ""
+                        }
+
+                        ${
+                            company.phone
+                                ? `<div>Telefone: ${escapeMarkup(company.phone)}</div>`
+                                : ""
+                        }
+                    </div>
+                </header>
+
+                <hr class="separator">
+
+                <h2 class="title">
+                    Comprovante de venda
+                </h2>
+
+                <section class="sale-info">
+                    <div>
+                        <strong>Venda:</strong>
+                        #${Number(sale.id)}
+                    </div>
+
+                    <div>
+                        <strong>Data:</strong>
+                        ${escapeMarkup(formatSaleDate(sale.dt_sale))}
+                    </div>
+
+                    <div>
+                        <strong>Cliente:</strong>
+                        ${escapeMarkup(customerName)}
+                    </div>
+
+                    ${
+                        taxId
+                            ? `
+                                <div>
+                                    <strong>CPF/CNPJ:</strong>
+                                    ${escapeMarkup(taxId)}
+                                </div>
+                            `
+                            : ""
+                    }
+
+                    ${
+                        customerAddress
+                            ? `
+                                <div>
+                                    <strong>Endereço:</strong>
+                                    ${escapeMarkup(customerAddress)}
+                                </div>
+                            `
+                            : ""
+                    }
+                </section>
+
+                <hr class="separator">
+
+                <section>
+                    <h3 class="section-title">
+                        Itens da venda
+                    </h3>
+
+                    ${
+                        items ||
+                        "<p>Nenhum item encontrado.</p>"
+                    }
+                </section>
+
+                <section class="summary">
+                    <div class="summary-line">
+                        <span>Subtotal</span>
+
+                        <span>
+                            ${currencyFormatter.format(
+                                parseMoney(
+                                    sale.sold_subtotal ??
+                                    sale.product_subtotal
+                                )
+                            )}
+                        </span>
+                    </div>
+
+                    ${discountLine}
+                    ${installmentLine}
+
+                    <div class="summary-line total">
+                        <span>TOTAL</span>
+
+                        <span>
+                            ${currencyFormatter.format(
+                                parseMoney(sale.total_value)
+                            )}
+                        </span>
+                    </div>
+                </section>
+
+                <section class="payment">
+                    <div>
+                        <strong>Pagamento:</strong>
+                        ${escapeMarkup(
+                            sale.payment_method_name ||
+                            "Não informado"
+                        )}
+                    </div>
+
+                    ${
+                        sale.installment_count
+                            ? `
+                                <div>
+                                    <strong>Parcelas:</strong>
+                                    ${Number(sale.installment_count)}x
+                                </div>
+                            `
+                            : ""
+                    }
+                </section>
+
+                <hr class="separator">
+
+                <footer class="footer">
+                    <div>Obrigado pela preferência!</div>
+                    <div>eight.cs development.</div>
+                </footer>
+            </main>
+
+            <script>
+                window.addEventListener("load", () => {
+                    setTimeout(() => window.print(), 300);
+                });
+            </script>
+        </body>
+        </html>`);
+
     printWindow.document.close();
-}
-
-export function downloadSaleXml(sale) {
-    const company = sale.company ?? {};
-    const customer = sale.customer ?? {};
-    const items = (sale.items ?? []).map((item, index) => `
-        <Item numero="${index + 1}">
-            <Codigo>${escapeMarkup(item.smCode)}</Codigo>
-            <CodigoBarras>${escapeMarkup(item.barCode)}</CodigoBarras>
-            <NCM>${escapeMarkup(item.ncm)}</NCM>
-            <CST>${escapeMarkup(item.cst)}</CST>
-            <CSOSN>${escapeMarkup(item.csosn)}</CSOSN>
-            <ICMS>${Number(item.icms) || 0}</ICMS>
-            <Produto>${escapeMarkup(item.name)}</Produto>
-            <Descricao>${escapeMarkup(item.description || "")}</Descricao>
-            <Unidade>${escapeMarkup(item.unitMeasure || item.unit_measure || "UN")}</Unidade>
-            <Quantidade>${Number(item.quantity)}</Quantidade>
-            <ValorUnitario>${Number(item.unitPrice).toFixed(2)}</ValorUnitario>
-            <ValorTotal>${Number(item.total).toFixed(2)}</ValorTotal>
-        </Item>`).join("");
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<ComprovanteVendaPOS validadeFiscal="false" autorizacaoSefaz="false">
-    <Aviso>Documento gerencial. Não é NF-e nem possui validade fiscal.</Aviso>
-    <Venda>
-        <Numero>${Number(sale.id)}</Numero>
-        <EmitidaEm>${escapeMarkup(sale.dt_sale)}</EmitidaEm>
-        <Emitente>
-            <NomeFantasia>${escapeMarkup(company.trade_name || "")}</NomeFantasia>
-            <RazaoSocial>${escapeMarkup(company.legal_name || "")}</RazaoSocial>
-            <CNPJ>${escapeMarkup(company.cnpj || "")}</CNPJ>
-            <InscricaoEstadual>${escapeMarkup(company.state_registration || "")}</InscricaoEstadual>
-            <InscricaoMunicipal>${escapeMarkup(company.municipal_registration || "")}</InscricaoMunicipal>
-            <RegimeTributario>${escapeMarkup(company.tax_regime || "")}</RegimeTributario>
-            <CodigoMunicipio>${escapeMarkup(company.city_ibge || "")}</CodigoMunicipio>
-            <Endereco>${escapeMarkup([company.address, company.number, company.complement, company.neighborhood, company.city, company.state, company.zip_code].filter(Boolean).join(", "))}</Endereco>
-        </Emitente>
-        <Destinatario>
-            <Nome>${escapeMarkup(sale.client_name || "Consumidor não identificado")}</Nome>
-            <CPF>${escapeMarkup(customer.cpf || "")}</CPF>
-            <CNPJ>${escapeMarkup(customer.cnpj || "")}</CNPJ>
-            <InscricaoEstadual>${escapeMarkup(customer.ie || "")}</InscricaoEstadual>
-            <CodigoMunicipio>${escapeMarkup(customer.city_ibge || "")}</CodigoMunicipio>
-            <Endereco>${escapeMarkup([customer.address, customer.number, customer.complement, customer.neighborhood, customer.city, customer.state, customer.zip_code].filter(Boolean).join(", "))}</Endereco>
-        </Destinatario>
-        <Itens>${items}
-        </Itens>
-        <Pagamento metodo="${escapeMarkup(sale.payment_method_name || "")}" parcelas="${Number(sale.installment_count) || 1}" />
-        <Totais>
-            <Produtos>${Number(sale.product_subtotal).toFixed(2)}</Produtos>
-            <SubtotalComDesconto>${Number(sale.sold_subtotal).toFixed(2)}</SubtotalComDesconto>
-            <Descontos>${Number(sale.discount_total).toFixed(2)}</Descontos>
-            <AcrescimoParcelamento>${Number(sale.installment_surcharge).toFixed(2)}</AcrescimoParcelamento>
-            <Total>${Number(sale.total_value).toFixed(2)}</Total>
-        </Totais>
-    </Venda>
-</ComprovanteVendaPOS>`;
-
-    downloadFile(`comprovante-venda-${Number(sale.id)}.xml`, xml, "application/xml;charset=utf-8");
 }

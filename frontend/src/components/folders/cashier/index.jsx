@@ -6,12 +6,13 @@ import {
     getCashierPaymentMethods,
     createCashierSale,
     getCashierClients,
-    searchCashierProducts
+    searchCashierItems
 } from "@/data/api/cashier";
+
 import CashierSalesModal from "./sales_modal";
 import CashierClientModal from "./client_modal";
 import CashierFinalizationModal from "./finalization_modal";
-import { downloadSaleXml, printSalePdf } from "./sale_documents";
+import { drawCupon, printSalePdf } from "./sale_documents";
 import "./style.scss";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
@@ -26,13 +27,41 @@ const initialSearches = {
 };
 
 const cashierColumns = [
-    { key: "smCode", label: "Código reduzido", tableLabel: "Cód. Reduzido" },
-    { key: "barCode", label: "Código de barras", tableLabel: "Cód. Barras" },
-    { key: "name", label: "Produto", tableLabel: "Produto" },
-    { key: "description", label: "Descrição", tableLabel: "Descrição" },
-    { key: "unitPrice", label: "Preço (R$)", tableLabel: "R$" },
-    { key: "quantity", label: "Venda (unidade)", tableLabel: "Venda" },
-    { key: "stock", label: "Estoque (unidade)", tableLabel: "Estoque" }
+    {
+        key: "smCode",
+        label: "Código reduzido",
+        tableLabel: "Cód. Reduzido"
+    },
+    {
+        key: "barCode",
+        label: "Código de barras",
+        tableLabel: "Cód. Barras"
+    },
+    {
+        key: "name",
+        label: "Produto / Serviço",
+        tableLabel: "Produto / Serviço"
+    },
+    {
+        key: "description",
+        label: "Descrição",
+        tableLabel: "Descrição"
+    },
+    {
+        key: "unitPrice",
+        label: "Preço (R$)",
+        tableLabel: "R$"
+    },
+    {
+        key: "quantity",
+        label: "Venda (unidade)",
+        tableLabel: "Venda"
+    },
+    {
+        key: "stock",
+        label: "Estoque (unidade)",
+        tableLabel: "Estoque"
+    }
 ];
 
 const initialColumnVisibility = {
@@ -44,6 +73,7 @@ const initialColumnVisibility = {
     quantity: true,
     stock: true
 };
+
 const cashierIcons = {
     filter: <path d="M3 5h18l-7.2 8.1v5.5l-3.6 1.8v-7.3L3 5Z" />,
     clear: (
@@ -108,7 +138,24 @@ function normalizeText(value) {
         .trim();
 }
 
+/**
+ * Trata registros nulos e respostas sem status.
+ * Quando o backend não informa status, não descarta o registro
+ * apenas por ausência desse campo.
+ */
 function isActiveRecord(record) {
+    if (!record || typeof record !== "object") {
+        return false;
+    }
+
+    if (
+        record.status === undefined ||
+        record.status === null ||
+        record.status === ""
+    ) {
+        return true;
+    }
+
     return record.status === true || Number(record.status) === 1;
 }
 
@@ -116,6 +163,21 @@ function getErrorMessage(error, fallback) {
     return error instanceof Error ? error.message : fallback;
 }
 
+/**
+ * Produtos e serviços podem ter o mesmo ID.
+ * A chave inclui o tipo para identificar cada item corretamente.
+ */
+function getCashierItemKey(item) {
+    return `${item.itemType || "product"}:${item.id}`;
+}
+
+/**
+ * Campo de pesquisa compartilhado entre produtos e serviços.
+ *
+ * searchCashierItems já consulta os dois tipos e retorna uma única
+ * lista. Portanto, não se deve usar Promise.allSettled para dividir
+ * novamente essa resposta.
+ */
 function ProductSearchField({
     field,
     label,
@@ -128,7 +190,8 @@ function ProductSearchField({
     const [suggestions, setSuggestions] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [searchError, setSearchError] = useState("");
-    const query = value.trim();
+
+    const query = String(value ?? "").trim();
 
     useEffect(() => {
         if (!query) {
@@ -139,34 +202,65 @@ function ProductSearchField({
         }
 
         const controller = new AbortController();
+
         setSuggestions([]);
         setIsSearching(true);
         setSearchError("");
 
-        const timeoutId = window.setTimeout(() => {
-            searchCashierProducts(field, query, controller.signal)
-                .then((products) => {
-                    if (controller.signal.aborted) {
-                        return;
-                    }
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                // A API já retorna produtos e serviços em uma lista.
+                const results = await searchCashierItems(
+                    field,
+                    query,
+                    controller.signal
+                );
 
-                    setSuggestions(products.filter(isActiveRecord));
-                    setIsSearching(false);
-                })
-                .catch((error) => {
-                    if (controller.signal.aborted) {
-                        return;
-                    }
+                if (controller.signal.aborted) {
+                    return;
+                }
 
-                    setSuggestions([]);
-                    setSearchError(
-                        getErrorMessage(
-                            error,
-                            "Não foi possível pesquisar produtos."
-                        )
-                    );
-                    setIsSearching(false);
-                });
+                const items = Array.isArray(results) ? results : [];
+
+                const normalizedSuggestions = items
+                    .filter(isActiveRecord)
+                    .map((item) => {
+                        const itemType =
+                            item.itemType === "service"
+                                ? "service"
+                                : "product";
+
+                        return {
+                            ...item,
+                            itemType,
+                            value: item.value ?? item.cost ?? 0,
+                            amount:
+                                itemType === "service"
+                                    ? null
+                                    : item.amount,
+                            unit_measure: item.unit_measure || "UN"
+                        };
+                    });
+
+                setSuggestions(normalizedSuggestions);
+                setSearchError("");
+                setIsSearching(false);
+            } catch (error) {
+                if (controller.signal.aborted) {
+                    return;
+                }
+
+                setSuggestions([]);
+
+                setSearchError(
+                    getErrorMessage(
+                        error,
+                        "Não foi possível pesquisar produtos e serviços."
+                    )
+                );
+
+                setIsSearching(false);
+            }
         }, 300);
 
         return () => {
@@ -176,14 +270,20 @@ function ProductSearchField({
     }, [field, query]);
 
     const visibleSuggestions = inStockOnly
-        ? suggestions.filter((product) => parseNumber(product.amount) > 0)
+        ? suggestions.filter(
+            (item) =>
+                item.itemType === "service" ||
+                parseNumber(item.amount) > 0
+        )
         : suggestions;
 
     return (
         <div className={"cashier-search cashier-search--" + field}>
             <label className="cashier-search__field">
                 <span className="visually-hidden">{label}</span>
+
                 <CashierIcon name="search" />
+
                 <input
                     type="search"
                     autoComplete="off"
@@ -194,63 +294,94 @@ function ProductSearchField({
             </label>
 
             {query && (
-                <div className="cashier-search__results" aria-live="polite">
+                <div
+                    className="cashier-search__results"
+                    aria-live="polite"
+                    aria-busy={isSearching}
+                >
                     {isSearching && (
                         <p className="cashier-search__message">
-                            Buscando produtos...
+                            Buscando produtos e serviços...
                         </p>
                     )}
 
                     {!isSearching && searchError && (
-                        <p className="cashier-search__message cashier-search__message--error" role="alert">
+                        <p
+                            className="cashier-search__message cashier-search__message--error"
+                            role="alert"
+                        >
                             {searchError}
                         </p>
                     )}
 
-                    {!isSearching && !searchError && visibleSuggestions.length === 0 && (
-                        <p className="cashier-search__message">
-                            {suggestions.length > 0 && inStockOnly
-                                ? "Nenhum resultado com estoque disponível."
-                                : "Nenhum produto encontrado."}
-                        </p>
-                    )}
+                    {!isSearching &&
+                        !searchError &&
+                        visibleSuggestions.length === 0 && (
+                            <p className="cashier-search__message">
+                                {suggestions.length > 0 && inStockOnly
+                                    ? "Nenhum produto com estoque disponível."
+                                    : "Nenhum produto ou serviço encontrado."}
+                            </p>
+                        )}
 
-                    {!isSearching && !searchError && visibleSuggestions.length > 0 && (
-                        <ul className="cashier-search__list">
-                            {visibleSuggestions.map((product) => (
-                                <li key={product.id}>
-                                    <button
-                                        className="cashier-search__result"
-                                        type="button"
-                                        onClick={() => {
-                                            onSelect(product);
-                                            onChange("");
-                                        }}
-                                    >
-                                        <span className="cashier-search__result-name">
-                                            {product.name}
-                                        </span>
-                                        <span className="cashier-search__result-meta">
-                                            {product.sm_code || product.bar_code || "Sem código"}
-                                            {" · "}
-                                            {currencyFormatter.format(parseNumber(product.value))}
-                                        </span>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    {!isSearching &&
+                        !searchError &&
+                        visibleSuggestions.length > 0 && (
+                            <ul className="cashier-search__list">
+                                {visibleSuggestions.map((item) => (
+                                    <li key={getCashierItemKey(item)}>
+                                        <button
+                                            className="cashier-search__result"
+                                            type="button"
+                                            onClick={() => {
+                                                onSelect(item);
+                                                onChange("");
+                                            }}
+                                        >
+                                            <span className="cashier-search__result-name">
+                                                {item.name}
+                                            </span>
+
+                                            <span className="cashier-search__result-meta">
+                                                {item.itemType === "service"
+                                                    ? "Serviço"
+                                                    : "Produto"}
+
+                                                {" · "}
+
+                                                {item.sm_code ||
+                                                    item.bar_code ||
+                                                    "Sem código"}
+
+                                                {" · "}
+
+                                                {currencyFormatter.format(
+                                                    parseNumber(item.value)
+                                                )}
+                                            </span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                 </div>
             )}
         </div>
     );
 }
 
-function ClientSearchField({ value, selectedClientId, onChange, onSelect, onCreateClient }) {
+function ClientSearchField({
+    value,
+    selectedClientId,
+    onChange,
+    onSelect,
+    onCreateClient
+}) {
     const [suggestions, setSuggestions] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [searchError, setSearchError] = useState("");
-    const query = value.trim();
+
+    const query = String(value ?? "").trim();
 
     useEffect(() => {
         if (!query || selectedClientId !== null) {
@@ -261,6 +392,7 @@ function ClientSearchField({ value, selectedClientId, onChange, onSelect, onCrea
         }
 
         const controller = new AbortController();
+
         setSuggestions([]);
         setIsSearching(true);
         setSearchError("");
@@ -269,14 +401,21 @@ function ClientSearchField({ value, selectedClientId, onChange, onSelect, onCrea
             getCashierClients(query, controller.signal)
                 .then((clients) => {
                     if (controller.signal.aborted) return;
-                    setSuggestions(clients);
+
+                    setSuggestions(
+                        Array.isArray(clients) ? clients : []
+                    );
                     setIsSearching(false);
                 })
                 .catch((error) => {
                     if (controller.signal.aborted) return;
+
                     setSuggestions([]);
                     setSearchError(
-                        getErrorMessage(error, "Nao foi possivel pesquisar clientes.")
+                        getErrorMessage(
+                            error,
+                            "Não foi possível pesquisar clientes."
+                        )
                     );
                     setIsSearching(false);
                 });
@@ -291,7 +430,10 @@ function ClientSearchField({ value, selectedClientId, onChange, onSelect, onCrea
     return (
         <div className="cashier-client-search">
             <label className="cashier-client-search__field">
-                <span className="visually-hidden">Cliente (opcional)</span>
+                <span className="visually-hidden">
+                    Cliente (opcional)
+                </span>
+
                 <input
                     type="search"
                     autoComplete="off"
@@ -302,66 +444,97 @@ function ClientSearchField({ value, selectedClientId, onChange, onSelect, onCrea
             </label>
 
             {query && selectedClientId === null && (
-                <div className="cashier-search__results" aria-live="polite" aria-busy={isSearching}>
+                <div
+                    className="cashier-search__results"
+                    aria-live="polite"
+                    aria-busy={isSearching}
+                >
                     {isSearching && (
-                        <p className="cashier-search__message">Buscando clientes...</p>
+                        <p className="cashier-search__message">
+                            Buscando clientes...
+                        </p>
                     )}
+
                     {!isSearching && searchError && (
-                        <p className="cashier-search__message cashier-search__message--error" role="alert">
+                        <p
+                            className="cashier-search__message cashier-search__message--error"
+                            role="alert"
+                        >
                             {searchError}
                         </p>
                     )}
-                    {!isSearching && !searchError && suggestions.length === 0 && (
-                        <div className="cashier-client-search__empty">
-                            <p className="cashier-search__message">Nenhum cliente encontrado.</p>
-                            <button
-                                className="cashier-client-search__create"
-                                type="button"
-                                onClick={() => onCreateClient(query)}
-                            >
-                                Cadastrar cliente
-                            </button>
-                        </div>
-                    )}
-                    {!isSearching && !searchError && suggestions.length > 0 && (
-                        <ul className="cashier-search__list">
-                            {suggestions.map((client) => {
-                                const taxId = client.cpf || client.cnpj;
-                                return (
-                                    <li key={client.id}>
-                                        <button
-                                            className="cashier-search__result"
-                                            type="button"
-                                            onClick={() => onSelect(client)}
-                                        >
-                                            <span className="cashier-search__result-name">{client.name}</span>
-                                            <span className="cashier-search__result-meta">
-                                                {taxId
-                                                    ? (client.cpf ? "CPF: " : "CNPJ: ") + taxId
-                                                    : "Sem CPF/CNPJ"}
-                                            </span>
-                                        </button>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    )}
+
+                    {!isSearching &&
+                        !searchError &&
+                        suggestions.length === 0 && (
+                            <div className="cashier-client-search__empty">
+                                <p className="cashier-search__message">
+                                    Nenhum cliente encontrado.
+                                </p>
+
+                                <button
+                                    className="cashier-client-search__create"
+                                    type="button"
+                                    onClick={() => onCreateClient(query)}
+                                >
+                                    Cadastrar cliente
+                                </button>
+                            </div>
+                        )}
+
+                    {!isSearching &&
+                        !searchError &&
+                        suggestions.length > 0 && (
+                            <ul className="cashier-search__list">
+                                {suggestions.map((client) => {
+                                    const taxId = client.cpf || client.cnpj;
+
+                                    return (
+                                        <li key={client.id}>
+                                            <button
+                                                className="cashier-search__result"
+                                                type="button"
+                                                onClick={() => onSelect(client)}
+                                            >
+                                                <span className="cashier-search__result-name">
+                                                    {client.name}
+                                                </span>
+
+                                                <span className="cashier-search__result-meta">
+                                                    {taxId
+                                                        ? (client.cpf
+                                                            ? "CPF: "
+                                                            : "CNPJ: ") + taxId
+                                                        : "Sem CPF/CNPJ"}
+                                                </span>
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
                 </div>
             )}
         </div>
     );
 }
+
 export default function CashierPage() {
     const location = useLocation();
     const navigate = useNavigate();
+
     const [paymentMethods, setPaymentMethods] = useState([]);
     const [installments, setInstallments] = useState([]);
     const [selectedProducts, setSelectedProducts] = useState([]);
     const [searches, setSearches] = useState(initialSearches);
     const [inStockOnly, setInStockOnly] = useState(false);
-    const [columnVisibility, setColumnVisibility] = useState(initialColumnVisibility);
+    const [columnVisibility, setColumnVisibility] = useState(
+        initialColumnVisibility
+    );
     const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
+
     const columnFilterRef = useRef(null);
+
     const [isLoadingPayment, setIsLoadingPayment] = useState(true);
     const [paymentError, setPaymentError] = useState("");
     const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
@@ -377,7 +550,8 @@ export default function CashierPage() {
     const [finalizationStage, setFinalizationStage] = useState(null);
     const [isFinalizing, setIsFinalizing] = useState(false);
     const [isCheckingClient, setIsCheckingClient] = useState(false);
-    const [resumeAfterRegistration, setResumeAfterRegistration] = useState(false);
+    const [resumeAfterRegistration, setResumeAfterRegistration] =
+        useState(false);
     const [finalizationError, setFinalizationError] = useState("");
     const [taxIdDraft, setTaxIdDraft] = useState("");
     const [completedSale, setCompletedSale] = useState(null);
@@ -393,21 +567,28 @@ export default function CashierPage() {
             getCashierPaymentMethods(),
             getCashierInstallments()
         ]).then(([methodsResult, installmentsResult]) => {
-            if (!isMounted) {
-                return;
-            }
+            if (!isMounted) return;
 
             let nextPaymentError = "";
 
             if (methodsResult.status === "fulfilled") {
-                const activeMethods = methodsResult.value.filter(isActiveRecord);
+                const methods = Array.isArray(methodsResult.value)
+                    ? methodsResult.value
+                    : [];
+
+                const activeMethods = methods.filter(isActiveRecord);
+
                 const defaultMethod = activeMethods.find(
-                    (method) => normalizeText(method.name).includes("credito")
+                    (method) =>
+                        normalizeText(method.name).includes("credito")
                 ) ?? activeMethods[0];
 
                 setPaymentMethods(activeMethods);
+
                 if (!location.state?.cashierDraft?.paymentMethodId) {
-                    setPaymentMethodId(defaultMethod ? String(defaultMethod.id) : "");
+                    setPaymentMethodId(
+                        defaultMethod ? String(defaultMethod.id) : ""
+                    );
                 }
             } else {
                 nextPaymentError = getErrorMessage(
@@ -417,12 +598,23 @@ export default function CashierPage() {
             }
 
             if (installmentsResult.status === "fulfilled") {
-                const availableInstallments = installmentsResult.value;
+                const availableInstallments =
+                    Array.isArray(installmentsResult.value)
+                        ? installmentsResult.value
+                        : [];
+
                 setInstallments(availableInstallments);
-                const preferredInstallment = location.state?.cashierDraft?.installmentId;
-                const preferredInstallmentExists = availableInstallments.some(
-                    (installment) => String(installment.id) === String(preferredInstallment)
-                );
+
+                const preferredInstallment =
+                    location.state?.cashierDraft?.installmentId;
+
+                const preferredInstallmentExists =
+                    availableInstallments.some(
+                        (installment) =>
+                            String(installment.id) ===
+                            String(preferredInstallment)
+                    );
+
                 setInstallmentId(
                     preferredInstallmentExists
                         ? String(preferredInstallment)
@@ -448,23 +640,41 @@ export default function CashierPage() {
 
     useEffect(() => {
         const routeState = location.state;
+
         if (!routeState) return;
 
         const draft = routeState.cashierDraft;
+
         if (draft) {
-            setSelectedProducts(Array.isArray(draft.selectedProducts) ? draft.selectedProducts : []);
+            setSelectedProducts(
+                Array.isArray(draft.selectedProducts)
+                    ? draft.selectedProducts
+                    : []
+            );
+
             setSearches(draft.searches ?? initialSearches);
             setInStockOnly(Boolean(draft.inStockOnly));
-            setColumnVisibility(draft.columnVisibility ?? initialColumnVisibility);
+            setColumnVisibility(
+                draft.columnVisibility ?? initialColumnVisibility
+            );
             setClientName(draft.clientName ?? "");
             setClientId(draft.clientId ?? null);
             setClientTaxId(draft.clientTaxId ?? "");
-            setPaymentMethodId(draft.paymentMethodId ? String(draft.paymentMethodId) : "");
-            setInstallmentId(draft.installmentId ? String(draft.installmentId) : "");
+            setPaymentMethodId(
+                draft.paymentMethodId
+                    ? String(draft.paymentMethodId)
+                    : ""
+            );
+            setInstallmentId(
+                draft.installmentId
+                    ? String(draft.installmentId)
+                    : ""
+            );
         }
 
         if (routeState.createdClient) {
             const client = routeState.createdClient;
+
             setClientId(client.id);
             setClientName(client.name);
             setClientTaxId(client.cpf || client.cnpj || "");
@@ -474,12 +684,14 @@ export default function CashierPage() {
             setResumeAfterRegistration(true);
         }
 
-        navigate(location.pathname, { replace: true, state: null });
+        navigate(location.pathname, {
+            replace: true,
+            state: null
+        });
     }, [location.key, location.pathname, navigate]);
+
     useEffect(() => {
-        if (!isColumnMenuOpen) {
-            return undefined;
-        }
+        if (!isColumnMenuOpen) return undefined;
 
         function handleOutsideClick(event) {
             if (!columnFilterRef.current?.contains(event.target)) {
@@ -501,6 +713,7 @@ export default function CashierPage() {
             window.removeEventListener("keydown", handleEscape);
         };
     }, [isColumnMenuOpen]);
+
     const saleItemCount = useMemo(
         () => selectedProducts.reduce(
             (total, saleItem) => total + saleItem.quantity,
@@ -511,7 +724,8 @@ export default function CashierPage() {
 
     const productSubtotal = useMemo(
         () => selectedProducts.reduce(
-            (total, saleItem) => total + saleItem.quantity * saleItem.unitPrice,
+            (total, saleItem) =>
+                total + saleItem.quantity * saleItem.unitPrice,
             0
         ),
         [selectedProducts]
@@ -520,20 +734,28 @@ export default function CashierPage() {
     const selectedPaymentMethod = paymentMethods.find(
         (method) => String(method.id) === paymentMethodId
     );
+
     const isCreditPayment = normalizeText(selectedPaymentMethod?.name)
         .includes("credito");
+
     const selectedInstallment = installments.find(
         (installment) => String(installment.id) === installmentId
     );
+
     const installmentSurcharge = isCreditPayment
         ? productSubtotal * (Number(selectedInstallment?.percentage) || 0)
         : 0;
-    const totalValue = Math.round((productSubtotal + installmentSurcharge + Number.EPSILON) * 100) / 100;
+
+    const totalValue = Math.round(
+        (productSubtotal + installmentSurcharge + Number.EPSILON) * 100
+    ) / 100;
 
     const visibleColumns = cashierColumns.filter(
         (column) => columnVisibility[column.key]
     );
+
     const tableColumnCount = visibleColumns.length + 2;
+
     function toggleColumn(columnKey) {
         if (columnKey === "unitPrice") {
             setEditingPriceId(null);
@@ -544,6 +766,7 @@ export default function CashierPage() {
             [columnKey]: !currentVisibility[columnKey]
         }));
     }
+
     function updateSearch(field, value) {
         setSearches((currentSearches) => ({
             ...currentSearches,
@@ -556,73 +779,91 @@ export default function CashierPage() {
         setInStockOnly(false);
     }
 
-    function addProductToSale(product) {
-        setSelectedProducts((currentProducts) => {
-            const existingItem = currentProducts.find(
-                (saleItem) => saleItem.product.id === product.id
+    function addProductToSale(item) {
+        if (!item || item.id === undefined || item.id === null) {
+            setFeedback({
+                kind: "error",
+                message: "Não foi possível adicionar esse item à venda."
+            });
+            return;
+        }
+
+        const itemKey = getCashierItemKey(item);
+
+        setSelectedProducts((currentItems) => {
+            const existingItem = currentItems.find(
+                (saleItem) =>
+                    getCashierItemKey(saleItem.product) === itemKey
             );
 
             if (existingItem) {
-                return currentProducts.map((saleItem) =>
-                    saleItem.product.id === product.id
-                        ? { ...saleItem, quantity: saleItem.quantity + 1 }
+                return currentItems.map((saleItem) =>
+                    getCashierItemKey(saleItem.product) === itemKey
+                        ? {
+                            ...saleItem,
+                            quantity: saleItem.quantity + 1
+                        }
                         : saleItem
                 );
             }
 
             return [
-                ...currentProducts,
+                ...currentItems,
                 {
-                    product,
+                    product: item,
                     quantity: 1,
-                    unitPrice: parseNumber(product.value)
+                    unitPrice: parseNumber(item.value)
                 }
             ];
         });
+
         setFeedback(null);
     }
 
-    function changeSaleQuantity(productId, change) {
-        setSelectedProducts((currentProducts) => {
-            const saleItem = currentProducts.find(
-                (item) => item.product.id === productId
+    function changeSaleQuantity(itemKey, change) {
+        setSelectedProducts((currentItems) => {
+            const saleItem = currentItems.find(
+                (item) =>
+                    getCashierItemKey(item.product) === itemKey
             );
 
-            if (!saleItem) {
-                return currentProducts;
-            }
+            if (!saleItem) return currentItems;
 
             const nextQuantity = saleItem.quantity + change;
 
             if (nextQuantity <= 0) {
-                return currentProducts.filter(
-                    (item) => item.product.id !== productId
+                return currentItems.filter(
+                    (item) =>
+                        getCashierItemKey(item.product) !== itemKey
                 );
             }
 
-            return currentProducts.map((item) =>
-                item.product.id === productId
+            return currentItems.map((item) =>
+                getCashierItemKey(item.product) === itemKey
                     ? { ...item, quantity: nextQuantity }
                     : item
             );
         });
+
         setFeedback(null);
     }
 
-    function removeFromSale(productId) {
-        setSelectedProducts((currentProducts) =>
-            currentProducts.filter(
-                (saleItem) => saleItem.product.id !== productId
+    function removeFromSale(itemKey) {
+        setSelectedProducts((currentItems) =>
+            currentItems.filter(
+                (saleItem) =>
+                    getCashierItemKey(saleItem.product) !== itemKey
             )
         );
+
         setFeedback({
             kind: "notice",
-            message: "Produto removido desta venda."
+            message: "Item removido desta venda."
         });
     }
 
     function beginPriceEdit(saleItem) {
-        setEditingPriceId(saleItem.product.id);
+        setEditingPriceId(getCashierItemKey(saleItem.product));
         setPriceDraft(String(saleItem.unitPrice.toFixed(2)));
         setFeedback(null);
     }
@@ -630,26 +871,26 @@ export default function CashierPage() {
     function savePriceEdit() {
         const parsedPrice = Number(priceDraft.replace(",", "."));
 
-        if (editingPriceId === null) {
-            return;
-        }
+        if (editingPriceId === null) return;
 
         if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
             setFeedback({
                 kind: "error",
-                message: "Informe um preço válido para o produto."
+                message: "Informe um preço válido para o item."
             });
             return;
         }
 
-        setSelectedProducts((currentProducts) =>
-            currentProducts.map((saleItem) =>
-                saleItem.product.id === editingPriceId
+        setSelectedProducts((currentItems) =>
+            currentItems.map((saleItem) =>
+                getCashierItemKey(saleItem.product) === editingPriceId
                     ? { ...saleItem, unitPrice: parsedPrice }
                     : saleItem
             )
         );
+
         setEditingPriceId(null);
+
         setFeedback({
             kind: "notice",
             message: "Preço atualizado somente nesta venda."
@@ -661,10 +902,17 @@ export default function CashierPage() {
         setFeedback(null);
     }
 
-    function openClientRegistration(query = clientName, resumeFinalization = false) {
+    function openClientRegistration(
+        query = clientName,
+        resumeFinalization = false
+    ) {
         const searchValue = String(query ?? "").trim();
         const digits = searchValue.replace(/\D/g, "");
-        const isTaxIdSearch = [11, 14].includes(digits.length) && /^[\d\s./()-]+$/.test(searchValue);
+
+        const isTaxIdSearch =
+            [11, 14].includes(digits.length) &&
+            /^[\d\s./()-]+$/.test(searchValue);
+
         const cashierDraft = {
             selectedProducts,
             searches,
@@ -695,26 +943,51 @@ export default function CashierPage() {
         setFeedback(null);
     }
 
-    async function submitSale(taxIdOverride = null, clientOverride = null) {
-        if (isFinalizing || selectedProducts.length === 0 || !paymentMethodId) return;
+    async function submitSale(
+        taxIdOverride = null,
+        clientOverride = null
+    ) {
+        if (
+            isFinalizing ||
+            selectedProducts.length === 0 ||
+            !paymentMethodId
+        ) {
+            return;
+        }
 
         setIsFinalizing(true);
         setFinalizationError("");
 
         try {
-            const saleClientName = clientOverride?.name ?? clientName;
-            const saleClientId = clientOverride?.id ?? clientId;
+            const saleClientName =
+                clientOverride?.name ?? clientName;
+
+            const saleClientId =
+                clientOverride?.id ?? clientId;
+
             const sale = await createCashierSale({
-                clientName: String(saleClientName ?? "").trim() || null,
+                clientName:
+                    String(saleClientName ?? "").trim() || null,
                 clientId: saleClientId,
                 clientTaxId: taxIdOverride || null,
                 paymentMethodId: Number(paymentMethodId),
-                installmentId: isCreditPayment && installmentId ? Number(installmentId) : null,
-                items: selectedProducts.map((saleItem) => ({
-                    productId: saleItem.product.id,
-                    quantity: saleItem.quantity,
-                    unitPrice: saleItem.unitPrice
-                }))
+                installmentId:
+                    isCreditPayment && installmentId
+                        ? Number(installmentId)
+                        : null,
+
+                items: selectedProducts.map((saleItem) => {
+                    const item = saleItem.product;
+                    const isService = item.itemType === "service";
+
+                    return {
+                        ...(isService
+                            ? { serviceId: item.id }
+                            : { productId: item.id }),
+                        quantity: saleItem.quantity,
+                        unitPrice: saleItem.unitPrice
+                    };
+                })
             });
 
             setCompletedSale(sale);
@@ -727,7 +1000,10 @@ export default function CashierPage() {
             setFeedback(null);
         } catch (error) {
             setFinalizationError(
-                error instanceof Error ? error.message : "Não foi possível registrar a venda."
+                getErrorMessage(
+                    error,
+                    "Não foi possível registrar a venda."
+                )
             );
         } finally {
             setIsFinalizing(false);
@@ -735,7 +1011,14 @@ export default function CashierPage() {
     }
 
     async function handleFinalizeSale() {
-        if (saleItemCount === 0 || !paymentMethodId || isFinalizing || isCheckingClient) return;
+        if (
+            saleItemCount === 0 ||
+            !paymentMethodId ||
+            isFinalizing ||
+            isCheckingClient
+        ) {
+            return;
+        }
 
         setFeedback(null);
         setFinalizationError("");
@@ -745,20 +1028,33 @@ export default function CashierPage() {
             setIsCheckingClient(true);
 
             try {
-                const matches = await getCashierClients(clientName.trim());
+                const matches = await getCashierClients(
+                    clientName.trim()
+                );
+
                 const query = normalizeText(clientName);
                 const queryDigits = clientName.replace(/\D/g, "");
+
                 const exactMatches = matches.filter((client) => {
-                    const exactName = normalizeText(client.name) === query;
+                    const exactName =
+                        normalizeText(client.name) === query;
+
                     const exactTaxId = [client.cpf, client.cnpj]
                         .filter(Boolean)
-                        .some((taxId) => String(taxId).replace(/\D/g, "") === queryDigits && [11, 14].includes(queryDigits.length));
+                        .some(
+                            (taxId) =>
+                                String(taxId).replace(/\D/g, "") ===
+                                    queryDigits &&
+                                [11, 14].includes(queryDigits.length)
+                        );
+
                     return exactName || exactTaxId;
                 });
 
                 if (exactMatches.length === 1) {
                     const client = exactMatches[0];
                     const taxId = client.cpf || client.cnpj || "";
+
                     setClientId(client.id);
                     setClientName(client.name);
                     setClientTaxId(taxId);
@@ -769,6 +1065,7 @@ export default function CashierPage() {
                     } else {
                         setFinalizationStage("ask-tax-id");
                     }
+
                     return;
                 }
 
@@ -779,14 +1076,20 @@ export default function CashierPage() {
 
                 setFeedback({
                     kind: "error",
-                    message: "Selecione um dos clientes encontrados na lista antes de finalizar."
+                    message:
+                        "Selecione um dos clientes encontrados na lista antes de finalizar."
                 });
+
                 return;
             } catch (error) {
                 setFeedback({
                     kind: "error",
-                    message: getErrorMessage(error, "Não foi possível confirmar o cliente.")
+                    message: getErrorMessage(
+                        error,
+                        "Não foi possível confirmar o cliente."
+                    )
                 });
+
                 return;
             } finally {
                 setIsCheckingClient(false);
@@ -794,9 +1097,16 @@ export default function CashierPage() {
         }
 
         const hasKnownTaxId = Boolean(clientTaxId.trim());
-        setFinalizationStage(clientName.trim() && !hasKnownTaxId ? "ask-tax-id" : "submitting");
 
-        if (!clientName.trim() || hasKnownTaxId) void submitSale(null);
+        setFinalizationStage(
+            clientName.trim() && !hasKnownTaxId
+                ? "ask-tax-id"
+                : "submitting"
+        );
+
+        if (!clientName.trim() || hasKnownTaxId) {
+            void submitSale(null);
+        }
     }
 
     useEffect(() => {
@@ -814,40 +1124,65 @@ export default function CashierPage() {
         setFinalizationStage("submitting");
         void submitSale(null);
     }, [resumeAfterRegistration, isLoadingPayment]);
+
     function handleTaxIdSubmit() {
         const normalizedTaxId = taxIdDraft.replace(/\D/g, "");
-        if (normalizedTaxId.length !== 11 && normalizedTaxId.length !== 14) {
-            setFinalizationError("Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.");
+
+        if (
+            normalizedTaxId.length !== 11 &&
+            normalizedTaxId.length !== 14
+        ) {
+            setFinalizationError(
+                "Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos."
+            );
             return;
         }
+
         void submitSale(normalizedTaxId);
     }
 
     function closeFinalizationModal() {
         if (isFinalizing) return;
+
         setFinalizationStage(null);
         setFinalizationError("");
         setCompletedSale(null);
     }
 
-return (
+    return (
         <main className="cashier-page">
             <header className="cashier-header">
-                <h1 className="cashier-header__brand">POSSO AJUDAR?</h1>
-                <span className="cashier-header__page-title">Caixa</span>
+                <h1 className="cashier-header__brand">
+                    POSSO AJUDAR?
+                </h1>
+
+                <span className="cashier-header__page-title">
+                    Caixa
+                </span>
             </header>
 
             <div className="cashier-content">
-                <section className="cashier-toolbar" aria-label="Busca de produtos">
-                    <div className="cashier-column-filter" ref={columnFilterRef}>
+                <section
+                    className="cashier-toolbar"
+                    aria-label="Busca de produtos e serviços"
+                >
+                    <div
+                        className="cashier-column-filter"
+                        ref={columnFilterRef}
+                    >
                         <button
-                            className={"cashier-toolbar__icon-button " + (isColumnMenuOpen ? "is-active" : "")}
+                            className={
+                                "cashier-toolbar__icon-button " +
+                                (isColumnMenuOpen ? "is-active" : "")
+                            }
                             type="button"
                             aria-label="Configurar colunas da tabela"
                             aria-expanded={isColumnMenuOpen}
                             aria-controls="cashier-column-filter-menu"
                             title="Configurar colunas da tabela"
-                            onClick={() => setIsColumnMenuOpen((isOpen) => !isOpen)}
+                            onClick={() =>
+                                setIsColumnMenuOpen((isOpen) => !isOpen)
+                            }
                         >
                             <CashierIcon name="filter" />
                         </button>
@@ -860,13 +1195,15 @@ return (
                                 <h2 className="cashier-column-filter__title">
                                     Colunas da tabela
                                 </h2>
+
                                 <p className="cashier-column-filter__hint">
                                     Ative ou oculte as informações exibidas no Caixa.
                                 </p>
 
                                 <div className="cashier-column-filter__options">
                                     {cashierColumns.map((column) => {
-                                        const isVisible = columnVisibility[column.key];
+                                        const isVisible =
+                                            columnVisibility[column.key];
 
                                         return (
                                             <button
@@ -874,17 +1211,23 @@ return (
                                                 type="button"
                                                 key={column.key}
                                                 aria-pressed={isVisible}
-                                                onClick={() => toggleColumn(column.key)}
+                                                onClick={() =>
+                                                    toggleColumn(column.key)
+                                                }
                                             >
                                                 <span>{column.label}</span>
+
                                                 <span
                                                     className="cashier-column-filter__switch"
                                                     aria-hidden="true"
                                                 >
                                                     <span />
                                                 </span>
+
                                                 <span className="cashier-column-filter__state">
-                                                    {isVisible ? "Exibido" : "Oculto"}
+                                                    {isVisible
+                                                        ? "Exibido"
+                                                        : "Oculto"}
                                                 </span>
                                             </button>
                                         );
@@ -897,15 +1240,23 @@ return (
                                     className="cashier-column-filter__toggle"
                                     type="button"
                                     aria-pressed={inStockOnly}
-                                    onClick={() => setInStockOnly((currentValue) => !currentValue)}
+                                    onClick={() =>
+                                        setInStockOnly(
+                                            (currentValue) => !currentValue
+                                        )
+                                    }
                                 >
-                                    <span>Somente produtos com estoque</span>
+                                    <span>
+                                        Somente produtos com estoque
+                                    </span>
+
                                     <span
                                         className="cashier-column-filter__switch"
                                         aria-hidden="true"
                                     >
                                         <span />
                                     </span>
+
                                     <span className="cashier-column-filter__state">
                                         {inStockOnly ? "Ativo" : "Inativo"}
                                     </span>
@@ -926,31 +1277,37 @@ return (
 
                     <ProductSearchField
                         field="name"
-                        label="Buscar produto pelo nome"
-                        placeholder="Produto"
+                        label="Buscar produto ou serviço pelo nome"
+                        placeholder="Produto ou serviço"
                         value={searches.name}
                         inStockOnly={inStockOnly}
-                        onChange={(value) => updateSearch("name", value)}
+                        onChange={(value) =>
+                            updateSearch("name", value)
+                        }
                         onSelect={addProductToSale}
                     />
 
                     <ProductSearchField
                         field="smCode"
-                        label="Buscar pelo código reduzido"
+                        label="Buscar produto ou serviço pelo código reduzido"
                         placeholder="Código Reduzido"
                         value={searches.smCode}
                         inStockOnly={inStockOnly}
-                        onChange={(value) => updateSearch("smCode", value)}
+                        onChange={(value) =>
+                            updateSearch("smCode", value)
+                        }
                         onSelect={addProductToSale}
                     />
 
                     <ProductSearchField
                         field="barCode"
-                        label="Buscar pelo código de barras"
+                        label="Buscar produto ou serviço pelo código de barras"
                         placeholder="Código de Barras"
                         value={searches.barCode}
                         inStockOnly={inStockOnly}
-                        onChange={(value) => updateSearch("barCode", value)}
+                        onChange={(value) =>
+                            updateSearch("barCode", value)
+                        }
                         onSelect={addProductToSale}
                     />
 
@@ -966,70 +1323,128 @@ return (
                 </section>
 
                 {paymentError && (
-                    <p className="cashier-load-error cashier-load-error--payment" role="alert">
+                    <p
+                        className="cashier-load-error cashier-load-error--payment"
+                        role="alert"
+                    >
                         {paymentError}
                     </p>
                 )}
 
                 <section
                     className="cashier-products-panel"
-                    aria-label="Produtos selecionados para venda"
+                    aria-label="Produtos e serviços selecionados para venda"
                 >
                     <div className="cashier-products-scroll">
                         <table className="cashier-table">
                             <thead>
                                 <tr>
                                     <th scope="col">#</th>
+
                                     {visibleColumns.map((column) => (
                                         <th key={column.key} scope="col">
                                             {column.tableLabel}
                                         </th>
                                     ))}
+
                                     <th scope="col">Ações</th>
                                 </tr>
                             </thead>
+
                             <tbody>
                                 {selectedProducts.length === 0 && (
                                     <tr>
-                                        <td className="cashier-table__message" colSpan={tableColumnCount}>
-                                            Pesquise um produto e selecione um resultado para adicioná-lo à venda.
+                                        <td
+                                            className="cashier-table__message"
+                                            colSpan={tableColumnCount}
+                                        >
+                                            Pesquise um produto ou serviço e selecione um resultado para adicioná-lo à venda.
                                         </td>
                                     </tr>
                                 )}
 
                                 {selectedProducts.map((saleItem, index) => {
-                                    const { product, quantity, unitPrice } = saleItem;
+                                    const {
+                                        product,
+                                        quantity,
+                                        unitPrice
+                                    } = saleItem;
+
+                                    const itemKey =
+                                        getCashierItemKey(product);
+
+                                    const isService =
+                                        product.itemType === "service";
 
                                     return (
-                                        <tr key={product.id}>
+                                        <tr key={itemKey}>
                                             <td>{index + 1}</td>
+
                                             {visibleColumns.map((column) => (
                                                 <td
                                                     key={column.key}
-                                                    className={column.key === "description" ? "cashier-table__description" : ""}
+                                                    className={
+                                                        column.key === "description"
+                                                            ? "cashier-table__description"
+                                                            : ""
+                                                    }
                                                 >
-                                                    {column.key === "smCode" && (product.sm_code || "—")}
-                                                    {column.key === "barCode" && (product.bar_code || "—")}
-                                                    {column.key === "name" && product.name}
-                                                    {column.key === "description" && (product.description || "—")}
+                                                    {column.key === "smCode" &&
+                                                        (product.sm_code || "—")}
+
+                                                    {column.key === "barCode" &&
+                                                        (product.bar_code || "—")}
+
+                                                    {column.key === "name" && (
+                                                        <>
+                                                            <span>{product.name}</span>
+                                                            <small>
+                                                                {" "}
+                                                                ({isService
+                                                                    ? "Serviço"
+                                                                    : "Produto"})
+                                                            </small>
+                                                        </>
+                                                    )}
+
+                                                    {column.key === "description" &&
+                                                        (product.description || "—")}
+
                                                     {column.key === "quantity" && (
                                                         <output className="cashier-table__quantity">
-                                                            {quantity} {product.unit_measure || "UN"}
+                                                            {quantity}{" "}
+                                                            {product.unit_measure || "UN"}
                                                         </output>
                                                     )}
-                                                    {column.key === "stock" && (parseNumber(product.amount) + " " + (product.unit_measure || "UN"))}
+
+                                                    {column.key === "stock" && (
+                                                        isService
+                                                            ? "Não aplicável"
+                                                            : parseNumber(product.amount) +
+                                                              " " +
+                                                              (product.unit_measure || "UN")
+                                                    )}
+
                                                     {column.key === "unitPrice" && (
-                                                        editingPriceId === product.id ? (
+                                                        editingPriceId === itemKey ? (
                                                             <div className="cashier-price-editor">
                                                                 <input
                                                                     autoFocus
                                                                     type="number"
                                                                     min="0"
                                                                     step="0.01"
-                                                                    aria-label={"Novo preço para " + product.name}
+                                                                    aria-label={
+                                                                        "Novo preço para " +
+                                                                        product.name
+                                                                    }
                                                                     value={priceDraft}
-                                                                    onChange={(event) => setPriceDraft(event.target.value)}
+                                                                    onChange={(event) =>
+                                                                        setPriceDraft(
+                                                                            event.target.value
+                                                                        )
+                                                                    }
                                                                 />
+
                                                                 <button
                                                                     type="button"
                                                                     aria-label="Salvar preço"
@@ -1037,58 +1452,96 @@ return (
                                                                 >
                                                                     ✓
                                                                 </button>
+
                                                                 <button
                                                                     type="button"
                                                                     aria-label="Cancelar alteração de preço"
-                                                                    onClick={() => setEditingPriceId(null)}
+                                                                    onClick={() =>
+                                                                        setEditingPriceId(null)
+                                                                    }
                                                                 >
                                                                     ×
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            currencyFormatter.format(unitPrice)
+                                                            currencyFormatter.format(
+                                                                unitPrice
+                                                            )
                                                         )
                                                     )}
                                                 </td>
                                             ))}
+
                                             <td>
                                                 <div className="cashier-row-actions">
                                                     <button
                                                         className="cashier-row-actions__button cashier-row-actions__button--add"
                                                         type="button"
-                                                        aria-label={"Adicionar " + product.name + " à venda"}
+                                                        aria-label={
+                                                            "Adicionar " +
+                                                            product.name +
+                                                            " à venda"
+                                                        }
                                                         title="Adicionar uma unidade"
-                                                        onClick={() => changeSaleQuantity(product.id, 1)}
+                                                        onClick={() =>
+                                                            changeSaleQuantity(
+                                                                itemKey,
+                                                                1
+                                                            )
+                                                        }
                                                     >
                                                         <CashierIcon name="plus" />
                                                     </button>
+
                                                     <button
                                                         className="cashier-row-actions__button cashier-row-actions__button--remove"
                                                         type="button"
-                                                        aria-label={"Remover uma unidade de " + product.name}
+                                                        aria-label={
+                                                            "Remover uma unidade de " +
+                                                            product.name
+                                                        }
                                                         title="Remover uma unidade"
                                                         disabled={quantity === 0}
-                                                        onClick={() => changeSaleQuantity(product.id, -1)}
+                                                        onClick={() =>
+                                                            changeSaleQuantity(
+                                                                itemKey,
+                                                                -1
+                                                            )
+                                                        }
                                                     >
                                                         <CashierIcon name="minus" />
                                                     </button>
+
                                                     {columnVisibility.unitPrice && (
                                                         <button
                                                             className="cashier-row-actions__button cashier-row-actions__button--price"
                                                             type="button"
-                                                            aria-label={"Alterar preço de " + product.name + " nesta venda"}
+                                                            aria-label={
+                                                                "Alterar preço de " +
+                                                                product.name +
+                                                                " nesta venda"
+                                                            }
                                                             title="Alterar preço nesta venda"
-                                                            onClick={() => beginPriceEdit(saleItem)}
+                                                            onClick={() =>
+                                                                beginPriceEdit(saleItem)
+                                                            }
                                                         >
                                                             R$
                                                         </button>
                                                     )}
+
                                                     <button
                                                         className="cashier-row-actions__button cashier-row-actions__button--block"
                                                         type="button"
-                                                        aria-label={"Remover " + product.name + " desta venda"}
+                                                        aria-label={
+                                                            "Remover " +
+                                                            product.name +
+                                                            " desta venda"
+                                                        }
                                                         title="Remover da venda"
-                                                        onClick={() => removeFromSale(product.id)}
+                                                        onClick={() =>
+                                                            removeFromSale(itemKey)
+                                                        }
                                                     >
                                                         <CashierIcon name="block" />
                                                     </button>
@@ -1102,15 +1555,25 @@ return (
                     </div>
                 </section>
 
-                <section className="cashier-checkout" aria-label="Resumo da venda">
+                <section
+                    className="cashier-checkout"
+                    aria-label="Resumo da venda"
+                >
                     <div className="cashier-total">
                         <h2>TOTAL</h2>
-                        <output>{currencyFormatter.format(totalValue)}</output>
+
+                        <output>
+                            {currencyFormatter.format(totalValue)}
+                        </output>
+
                         {installmentSurcharge > 0 && (
                             <small className="cashier-total__surcharge">
-                                Inclui {currencyFormatter.format(installmentSurcharge)} de parcelamento
+                                Inclui{" "}
+                                {currencyFormatter.format(installmentSurcharge)}{" "}
+                                de parcelamento
                             </small>
                         )}
+
                         <span className="visually-hidden">
                             {saleItemCount} unidade(s) na venda
                         </span>
@@ -1130,20 +1593,38 @@ return (
                         />
 
                         <label className="cashier-payment__method">
-                            <span className="visually-hidden">Forma de pagamento</span>
+                            <span className="visually-hidden">
+                                Forma de pagamento
+                            </span>
+
                             <select
                                 value={paymentMethodId}
-                                disabled={isLoadingPayment || paymentMethods.length === 0}
-                                onChange={(event) => setPaymentMethodId(event.target.value)}
+                                disabled={
+                                    isLoadingPayment ||
+                                    paymentMethods.length === 0
+                                }
+                                onChange={(event) =>
+                                    setPaymentMethodId(event.target.value)
+                                }
                             >
                                 {isLoadingPayment && (
-                                    <option value="">Carregando formas de pagamento...</option>
+                                    <option value="">
+                                        Carregando formas de pagamento...
+                                    </option>
                                 )}
-                                {!isLoadingPayment && paymentMethods.length === 0 && (
-                                    <option value="">Forma de pagamento indisponível</option>
-                                )}
+
+                                {!isLoadingPayment &&
+                                    paymentMethods.length === 0 && (
+                                        <option value="">
+                                            Forma de pagamento indisponível
+                                        </option>
+                                    )}
+
                                 {paymentMethods.map((method) => (
-                                    <option key={method.id} value={method.id}>
+                                    <option
+                                        key={method.id}
+                                        value={method.id}
+                                    >
                                         {method.name}
                                     </option>
                                 ))}
@@ -1152,15 +1633,23 @@ return (
 
                         {isCreditPayment && (
                             <label className="cashier-payment__installment">
-                                <span className="visually-hidden">Parcelas</span>
+                                <span className="visually-hidden">
+                                    Parcelas
+                                </span>
+
                                 <select
                                     value={installmentId}
                                     disabled={installments.length === 0}
-                                    onChange={(event) => setInstallmentId(event.target.value)}
+                                    onChange={(event) =>
+                                        setInstallmentId(event.target.value)
+                                    }
                                 >
                                     {installments.length === 0 && (
-                                        <option value="">Parcelamento indisponível</option>
+                                        <option value="">
+                                            Parcelamento indisponível
+                                        </option>
                                     )}
+
                                     {installments.map((installment) => (
                                         <option
                                             key={installment.id}
@@ -1178,11 +1667,21 @@ return (
                         <button
                             className="cashier-checkout__button"
                             type="button"
-                            disabled={saleItemCount === 0 || !paymentMethodId || isFinalizing || isCheckingClient}
+                            disabled={
+                                saleItemCount === 0 ||
+                                !paymentMethodId ||
+                                isFinalizing ||
+                                isCheckingClient
+                            }
                             onClick={handleFinalizeSale}
                         >
-                            {isCheckingClient ? "Verificando cliente..." : isFinalizing ? "Finalizando..." : "Finalizar"}
+                            {isCheckingClient
+                                ? "Verificando cliente..."
+                                : isFinalizing
+                                    ? "Finalizando..."
+                                    : "Finalizar"}
                         </button>
+
                         <button
                             className="cashier-checkout__button"
                             type="button"
@@ -1195,22 +1694,32 @@ return (
 
                 {feedback && (
                     <p
-                        className={"cashier-feedback cashier-feedback--" + feedback.kind}
-                        role={feedback.kind === "error" ? "alert" : "status"}
+                        className={
+                            "cashier-feedback cashier-feedback--" +
+                            feedback.kind
+                        }
+                        role={
+                            feedback.kind === "error"
+                                ? "alert"
+                                : "status"
+                        }
                     >
                         {feedback.message}
                     </p>
                 )}
             </div>
+
             {isSalesModalOpen && (
                 <CashierSalesModal onClose={closeSalesModal} />
             )}
+
             {isClientModalOpen && (
                 <CashierClientModal
                     onClose={() => setIsClientModalOpen(false)}
                     onSelect={selectClient}
                 />
             )}
+
             {finalizationStage && (
                 <CashierFinalizationModal
                     stage={finalizationStage}
@@ -1228,13 +1737,9 @@ return (
                     onSubmitTaxId={handleTaxIdSubmit}
                     onClose={closeFinalizationModal}
                     onDownloadPdf={printSalePdf}
-                    onDownloadXml={downloadSaleXml}
+                    onDownloadXml={drawCupon}
                 />
             )}
         </main>
     );
 }
-
-
-
-

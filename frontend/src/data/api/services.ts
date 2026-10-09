@@ -72,6 +72,17 @@ function url(path: string) {
     );
 }
 
+function withSignal(signal?: AbortSignal, options: RequestInit = {}): RequestInit {
+    if (signal === undefined) {
+        return options;
+    }
+
+    return {
+        ...options,
+        signal
+    };
+}
+
 async function requestData<T>(
     path: string,
     options: RequestInit = {}
@@ -122,9 +133,7 @@ async function requestData<T>(
 // ============================================================
 
 export function getServices(signal?: AbortSignal) {
-    return requestData<ServiceRecord[]>("/api/services", {
-        signal
-    });
+    return requestData<ServiceRecord[]>("/api/services", withSignal(signal));
 }
 
 // ============================================================
@@ -138,7 +147,7 @@ export function searchServices(
 ) {
     return requestData<ServiceRecord[]>(
         "/api/services/search/" + encodeURIComponent(query),
-        { signal }
+        withSignal(signal)
     );
 }
 
@@ -153,7 +162,7 @@ export function getService(
 ) {
     return requestData<ServiceRecord>(
         "/api/service/" + id,
-        { signal }
+        withSignal(signal)
     );
 }
 
@@ -167,7 +176,7 @@ export function getServiceBySmCode(
 ) {
     return requestData<ServiceRecord[]>(
         "/api/service/smcode/" + encodeURIComponent(smCode),
-        { signal }
+        withSignal(signal)
     );
 }
 
@@ -181,7 +190,7 @@ export function getServiceByBarCode(
 ) {
     return requestData<ServiceRecord[]>(
         "/api/service/barcode/" + encodeURIComponent(barCode),
-        { signal }
+        withSignal(signal)
     );
 }
 
@@ -195,7 +204,7 @@ export function getServiceByName(
 ) {
     return requestData<ServiceRecord[]>(
         "/api/service/name/" + encodeURIComponent(name),
-        { signal }
+        withSignal(signal)
     );
 }
 
@@ -269,6 +278,6 @@ export function getServiceReports(
 
     return requestData<ServiceReportRow[]>(
         "/api/services/reports" + (suffix ? "?" + suffix : ""),
-        { signal }
+        signal ? { signal } : {}
     );
 }

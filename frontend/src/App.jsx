@@ -16,6 +16,7 @@ import ProductReportsPage from "@/components/folders/product_reports";
 import ServicesReportsPage from "@/components/folders/services_reports";
 import ClientsReportsPage from "@/components/folders/clients_reports";
 import ClientRegistrationPage from "@/components/folders/client_registration";
+import ClientEditingPage from "@/components/folders/client_editing";
 import LoginPage from "@/components/folders/login";
 import SettingsPage from "@/components/folders/settings";
 import { getCurrentUser } from "@/data/api/auth";
@@ -124,6 +125,11 @@ function App() {
                     <Route
                         path="clientes/novo"
                         element={<ClientRegistrationPage />}
+                    />
+
+                    <Route
+                        path="clientes/editar/:clientId"
+                        element={<ClientEditingPage />}
                     />
 
                     <Route

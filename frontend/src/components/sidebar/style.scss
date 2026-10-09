@@ -1,10 +1,18 @@
 .sidebar {
     --sidebar-width: 20rem;
 
+    box-sizing: border-box;
+
     width: var(--sidebar-width);
     min-width: 0;
-    height: 100vh;
-    height: 100dvh;
+
+    // Ocupa pelo menos a altura da tela, mas pode crescer
+    // junto com a página quando o conteúdo principal for maior.
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    align-self: stretch;
     flex: 0 0 var(--sidebar-width);
 
     position: sticky;
@@ -33,7 +41,10 @@
 }
 
 .sidebar__profile {
+    box-sizing: border-box;
+
     min-height: 10.5rem;
+    flex: 0 0 auto;
 
     display: flex;
     align-items: flex-start;
@@ -83,6 +94,8 @@
 }
 
 .sidebar__avatar {
+    box-sizing: border-box;
+
     width: 5.5rem;
     height: 5.5rem;
     flex: 0 0 5.5rem;
@@ -116,21 +129,45 @@
 }
 
 .sidebar__navigation {
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
 
     display: flex;
     flex-direction: column;
-    justify-content: center;
+
+    // Mantém os itens no topo, mesmo quando a página cresce.
+    // Assim, o menu não fica centralizado no meio de uma
+    // sidebar muito alta.
+    justify-content: flex-start;
+
     gap: 1.2rem;
 
+    overflow-x: hidden;
     overflow-y: auto;
 
     padding: 1.75rem 0.35rem;
+
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.45) transparent;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.45);
+    }
 }
 
 .sidebar__section {
     min-width: 0;
+    flex: 0 0 auto;
 }
 
 .sidebar__section-title {
@@ -162,6 +199,8 @@
 }
 
 .sidebar__link {
+    box-sizing: border-box;
+
     min-height: 2.35rem;
 
     display: flex;
@@ -207,12 +246,17 @@
 }
 
 .sidebar__footer {
+    box-sizing: border-box;
+
     min-height: 2.6rem;
     flex: 0 0 2.6rem;
 
     display: flex;
 
+    // Empurra o rodapé para o final da sidebar quando
+    // houver espaço vertical disponível.
     margin: auto -4px -4px;
+
     border-top: 3px solid #000000;
 
     background: #000000;
@@ -220,6 +264,7 @@
 
 .sidebar__toggle {
     width: 100%;
+    min-width: 0;
 
     display: grid;
     place-items: center;
@@ -285,5 +330,40 @@
         width: 1.4rem;
         height: 1.4rem;
         flex-basis: 1.4rem;
+    }
+}
+
+@media (max-height: 600px) {
+    .sidebar__profile {
+        min-height: auto;
+        padding-block: 0.75rem;
+    }
+
+    .sidebar__navigation {
+        padding-block: 0.85rem;
+    }
+
+    .sidebar__section-title {
+        font-size: 1.2rem;
+    }
+
+    .sidebar__link {
+        font-size: 1.05rem;
+    }
+
+    .sidebar.is-collapsed {
+        .sidebar__profile {
+            min-height: 4.5rem;
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar {
+        transition: none;
+    }
+
+    .sidebar__link {
+        transition: none;
     }
 }
