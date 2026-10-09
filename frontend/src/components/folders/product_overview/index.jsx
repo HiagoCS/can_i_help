@@ -112,7 +112,7 @@ export default function ProductOverviewPage() {
         const data = {
             sm_code: form.sm_code.trim(), bar_code: form.bar_code.trim(), name: form.name.trim(),
             description: form.description, value: form.value, cost: form.cost,
-            unit_measure: form.unit_measure.trim().toUpperCase() || "UN",
+            unit_measure: form.unit_measure.trim().toUpperCase() || "",
             ncm: form.ncm.trim() || null,
             cst: taxRegime === "REGIME_NORMAL" ? form.cst.trim() : "0",
             csosn: taxRegime === "REGIME_NORMAL" ? form.csosn.trim() : "0",
@@ -187,7 +187,7 @@ export default function ProductOverviewPage() {
                                         {columnVisibility.sm_code && <td title={item.sm_code}>{item.sm_code}</td>}
                                         {columnVisibility.name && <td title={item.name}>{item.name}{!item.status && <small> · Inativo</small>}</td>}
                                         {columnVisibility.description && <td title={item.description ?? ""}>{item.description || "—"}</td>}
-                                        {columnVisibility.amount && <td>{item.amount ?? 0} {item.unit_measure || "UN"}</td>}
+                                        {columnVisibility.amount && <td>{item.amount ?? 0} {item.unit_measure || ""}</td>}
                                         {columnVisibility.cost && <td>{money(item.cost)}</td>}
                                         {columnVisibility.value && <td>{money(item.value)}</td>}
                                     </tr>)}
@@ -215,7 +215,7 @@ export default function ProductOverviewPage() {
                         <div className="product-overview__field-row">
                             <label className="product-overview__field"><span>Custo (R$)</span><input type="number" min="0" step=".01" value={form.cost} onChange={(event) => field("cost", event.target.value)} /></label>
                             <label className="product-overview__field"><span>Valor (R$)</span><input type="number" min="0" step=".01" value={form.value} onChange={(event) => field("value", event.target.value)} /></label>
-                            {["new", "copy"].includes(mode) && <label className="product-overview__field"><span>Quantidade inicial ({form.unit_measure || "UN"})</span><input type="number" min="0" step="1" value={form.amount} onChange={(event) => field("amount", event.target.value)} /></label>}
+                            {["new", "copy"].includes(mode) && <label className="product-overview__field"><span>Quantidade inicial ({form.unit_measure || ""})</span><input type="number" min="0" step="1" value={form.amount} onChange={(event) => field("amount", event.target.value)} /></label>}
                         </div>
                         <div className="product-overview__field-row">
                             <label className="product-overview__field"><span>NCM do produto</span><input inputMode="numeric" maxLength={8} placeholder={defaultNcm ? "Padrão: " + defaultNcm : "NCM"} value={form.ncm} onChange={(event) => field("ncm", event.target.value.replace(/\D/g, "").slice(0, 8))} /></label>
@@ -230,7 +230,7 @@ export default function ProductOverviewPage() {
                             <small className="product-overview__tax-note">CST, CSOSN e ICMS serão salvos como 0 para o regime atual.</small>
                         )}                    </> : selected ? <>
                         <div className="product-overview__product-title"><strong>{selected.name}</strong><span>#{selected.id}</span></div>
-                        <div className="product-overview__product-meta"><b>{selected.sm_code}</b><span>{selected.bar_code}</span><span>{selected.amount ?? 0} {selected.unit_measure || "UN"}</span></div>
+                        <div className="product-overview__product-meta"><b>{selected.sm_code}</b><span>{selected.bar_code}</span><span>{selected.amount ?? 0} {selected.unit_measure || ""}</span></div>
                         <div className="product-overview__product-prices"><span>Custo <b>{money(selected.cost)}</b></span><span>Valor <b>{money(selected.value)}</b></span></div>
                         <small className="product-overview__tax-note">NCM: {selected.ncm || defaultNcm || "—"}{taxRegime === "REGIME_NORMAL" ? " · CST " + selected.cst + " · CSOSN " + selected.csosn + " · ICMS " + selected.icms + "%" : ""}</small>
                         <span className={"product-overview__status " + (selected.status ? "is-active" : "is-inactive")}>{selected.status ? "Ativo no Caixa" : "Desativado no Caixa"}</span>

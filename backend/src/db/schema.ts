@@ -197,6 +197,17 @@ const fiscalCertificateTable = sqliteTable("fiscal_certificates", {
 // ============================================================
 // PRODUCTS
 // ============================================================
+const unitMeasureTable = sqliteTable("un_measure", {
+
+    id: integer("id").primaryKey(),
+
+    unity: text("unity")
+    .unique()
+    .notNull(),
+
+    description: text("description"),
+
+});
 
 const productsTable = sqliteTable("products", {
 
@@ -224,9 +235,9 @@ const productsTable = sqliteTable("products", {
     amount: text("amount")
         .default("0"),
 
-    unitMeasure: text("unit_measure")
+    unitId: integer("unit_id")
         .notNull()
-        .default("UN"),
+        .default(1).references(() => unitMeasureTable.id),
 
     // ========================
     // DADOS FISCAIS DO PRODUTO
@@ -388,6 +399,50 @@ const cashierTable = sqliteTable("cashier", {
 
 });
 
+// ============================================================
+// SERVICES
+// ============================================================
+
+const servicesTable = sqliteTable("services", {
+
+    id: integer("id").primaryKey(),
+
+    smCode: text("sm_code")
+        .unique()
+        .notNull(),
+
+    barCode: text("bar_code")
+        .unique()
+        .notNull(),
+
+    name: text("name")
+        .notNull(),
+
+    description: text("description"),
+
+    cost: text("cost")
+        .default("0.00"),
+
+    status: integer("status", { mode: "boolean" })
+        .notNull()
+
+});
+const stockServiceTable = sqliteTable("stock_service", {
+
+    id: integer("id").primaryKey(),
+
+    serviceId: integer("service_id")
+        .notNull()
+        .references(() => servicesTable.id),
+
+    productId: integer("product_id")
+        .notNull()
+        .references(() => productsTable.id),
+
+    qunt: integer("qunt")
+        .notNull(),
+
+});
 
 // ============================================================
 // STOCK SALE
@@ -404,8 +459,10 @@ const stockSaleTable = sqliteTable("stock_sale", {
         .references(() => cashierTable.id),
 
     productId: integer("product_id")
-        .notNull()
         .references(() => productsTable.id),
+
+    serviceId: integer("service_id")
+        .references(() => servicesTable.id),
 
     quntSale: integer("qunt_sale")
         .notNull(),
@@ -415,7 +472,6 @@ const stockSaleTable = sqliteTable("stock_sale", {
         .default("UN")
 
 });
-
 
 // ============================================================
 // FISCAL INVOICES
@@ -787,8 +843,12 @@ module.exports = {
     fiscalConfigTable,
     fiscalCertificateTable,
 
+    unitMeasureTable,
     productsTable,
     updateStockTable,
+
+    servicesTable,
+    stockServiceTable,
 
     paymentMethodTable,
     installmentsTable,

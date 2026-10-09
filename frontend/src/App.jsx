@@ -9,8 +9,10 @@ import {
 import SystemLayout from "@/components/layout";
 import CashierPage from "@/components/folders/cashier";
 import ProductOverviewPage from "@/components/folders/product_overview";
+import ServicesOverviewPage from "@/components/folders/services_overview";
 import ProductStockPage from "@/components/folders/product_stock";
 import ProductReportsPage from "@/components/folders/product_reports";
+import ServicesReportsPage from "@/components/folders/services_reports";
 import ClientRegistrationPage from "@/components/folders/client_registration";
 import LoginPage from "@/components/folders/login";
 import SettingsPage from "@/components/folders/settings";
@@ -83,6 +85,8 @@ function App() {
                     <Route path="produtos/visao-geral" element={<ProductOverviewPage />} />
                     <Route path="produtos/estoque/:productId?" element={<ProductStockPage />} />
                     <Route path="produtos/relatorios" element={<ProductReportsPage />} />
+                    <Route path="servicos/visao-geral" element={<ServicesOverviewPage />} />
+                    <Route path="servicos/relatorios" element={<ServicesReportsPage />} />
                     <Route path="clientes/novo" element={<ClientRegistrationPage />} />
                     <Route path="configuracoes" element={<SettingsPage />} />
                     <Route

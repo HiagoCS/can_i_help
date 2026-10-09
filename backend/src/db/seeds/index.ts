@@ -5,16 +5,18 @@ const { rolesUserSeed } = require("./roles_user");
 const { companySeed } = require("./company");
 const { fiscalConfigSeed } = require("./fiscalConfig");
 
+const { unMeasureSeed } = require("./unit_measure");
 const { productsSeed } = require("./products");
 const { paymentMethodSeed } = require("./paymentMethod");
 const { installmentsSeed } = require("./installments");
 const { clientsSeed } = require("./clients");
 
 const { cashierSeed } = require("./cashier");
+const { servicesSeed } = require("./services");
 
 
 async function index() {
-
+    await unMeasureSeed();
     // Usuários e permissões
     await userSeed();
     await rolesSeed();
@@ -32,6 +34,7 @@ async function index() {
 
     // Vendas e produtos vendidos
     await cashierSeed();
+    await servicesSeed();
 
     console.log("Seed executado com sucesso");
 
