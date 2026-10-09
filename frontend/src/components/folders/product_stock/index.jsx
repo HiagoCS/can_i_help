@@ -529,7 +529,7 @@ export default function ProductStockPage() {
             onMouseDown={clearSummarySelection}
         >
             <header className="product-stock__header">
-                <h1>POSSO AJUDAR?</h1>
+                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
                 <span>{title}</span>
             </header>
 
@@ -802,7 +802,14 @@ export default function ProductStockPage() {
                                         <th>#</th>
 
                                         {visibleStockColumns.map((column) => (
-                                            <th key={column.key}>
+                                            <th style={{
+                                                background:
+                                                (column.label==="Última entrada"?"#1478ed":
+                                                (column.label==="Última venda"?"#16843b":
+                                                (column.label==="Última saída"?"#e44558":"")))
+                                                ,color:(column.label==="Última entrada"?"#fff":
+                                                (column.label==="Última venda"?"#fff":
+                                                (column.label==="Última saída"?"#fff":"")))}} key={column.key}>
                                                 {column.label}
                                             </th>
                                         ))}
@@ -1275,37 +1282,17 @@ export default function ProductStockPage() {
                         ) : (
                             <>
                                 <button
+                                    className="product-overview__action product-overview__action--add"
                                     type="button"
-                                    className="product-stock__action product-stock__action--blue"
-                                    aria-label="Página anterior"
-                                    disabled={summaryPage === 0}
-                                    onClick={() =>
-                                        setSummaryPage((page) =>
-                                            Math.max(0, page - 1)
-                                        )
-                                    }
+                                    disabled={true}
                                 >
-                                    &lt;
                                 </button>
 
                                 <button
+                                    className="product-overview__action product-overview__action--add"
                                     type="button"
-                                    className="product-stock__action product-stock__action--blue"
-                                    aria-label="Próxima página"
-                                    disabled={
-                                        summaryPage >= summaryPageCount - 1
-                                    }
-                                    onClick={() =>
-                                        setSummaryPage((page) =>
-                                            Math.min(
-                                                summaryPageCount - 1,
-                                                page + 1
-                                            )
-                                        )
-                                    }
-                                >
-                                    &gt;
-                                </button>
+                                    disabled={true}
+                                ></button>
 
                                 <button
                                     type="button"

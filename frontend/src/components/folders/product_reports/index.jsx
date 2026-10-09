@@ -299,7 +299,7 @@ function reportPdf(rows, range, title, popup) {
         .map(
             (row, index) =>
                 "<tr><td>" +
-                (index + 1) +
+                (row.id) +
                 "</td><td>" +
                 safe(row.name) +
                 "</td><td>" +
@@ -544,7 +544,7 @@ export default function ProductReportsPage() {
     return (
         <main className="product-reports">
             <header className="product-reports__header">
-                <h1>POSSO AJUDAR?</h1>
+                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
                 <span>Relatório - Produtos</span>
             </header>
 

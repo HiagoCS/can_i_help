@@ -61,9 +61,6 @@ export default function SystemLayout({ user, onUserUpdate }) {
                     >
                         <span className="system-layout__hamburger" aria-hidden="true" />
                     </button>
-                    <span className="system-layout__mobile-title">
-                        POSSO AJUDAR?
-                    </span>
                 </header>
 
                 <div className="system-layout__page">

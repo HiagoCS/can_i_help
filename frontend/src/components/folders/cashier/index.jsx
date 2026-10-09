@@ -1152,7 +1152,8 @@ export default function CashierPage() {
     return (
         <main className="cashier-page">
             <header className="cashier-header">
-                <h1 className="cashier-header__brand">
+                <h1 className="cashier-header__brand"
+                onClick={() =>{window.location.href="/"}} >
                     POSSO AJUDAR?
                 </h1>
 

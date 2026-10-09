@@ -531,7 +531,7 @@ export default function ServicesReportsPage() {
     return (
         <main className="services-reports">
             <header className="services-reports__header">
-                <h1>POSSO AJUDAR?</h1>
+                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
                 <span>Relatório - Serviços</span>
             </header>
 

@@ -283,7 +283,7 @@ export default function ClientsOverviewPage() {
     return (
         <main className="clients-overview">
             <header className="clients-overview__header">
-                <h1>POSSO AJUDAR?</h1>
+                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
                 <span>Clientes - Geral</span>
             </header>
 

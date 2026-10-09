@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import PaperPen from "@/assets/icons/paper-pen-svgrepo-com.svg";
 import {
     createService,
     deleteService,
@@ -535,7 +536,7 @@ export default function ServicesOverviewPage() {
             onMouseDown={clearSelectionOutsideTable}
         >
             <header className="services-overview__header">
-                <h1>POSSO AJUDAR?</h1>
+                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
                 <span>Serviços - Geral</span>
             </header>
 
@@ -1129,7 +1130,7 @@ export default function ServicesOverviewPage() {
                                     disabled={!selected}
                                     onClick={startCopy}
                                 >
-                                    ▢
+                                    <img src={PaperPen} alt="Copiar produto" />
                                 </button>
 
                                 <button
@@ -1158,7 +1159,7 @@ export default function ServicesOverviewPage() {
                                     aria-label="Copiar serviço"
                                     onClick={startCopy}
                                 >
-                                    ▢
+                                    <img src={PaperPen} alt="Copiar serviço" />
                                 </button>
 
                                 <button
@@ -1194,7 +1195,7 @@ export default function ServicesOverviewPage() {
                                     aria-label="Copiar serviço"
                                     disabled
                                 >
-                                    ▢
+                                    <img src={PaperPen} alt="Copiar produto" />
                                 </button>
 
                                 <button

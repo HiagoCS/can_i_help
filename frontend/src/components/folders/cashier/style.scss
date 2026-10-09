@@ -35,12 +35,12 @@
 
     color: #ffffff;
 
-    font-family: "Quicksand-Bold-Oblique", sans-serif;
+    font-family: "Brandy", sans-serif;
     font-size: clamp(1.55rem, 3vw, 2.75rem);
     line-height: 1;
     letter-spacing: 0.025em;
     text-transform: uppercase;
-    -webkit-text-stroke: 1px #000000;
+    -webkit-text-stroke: 0.2px #000000;
     text-shadow: 2px 2px 0 #000000;
 }
 
@@ -898,7 +898,7 @@
 
 .cashier-column-filter {
     position: relative;
-    z-index: 30;
+    z-index: 10;
 
     flex: 0 0 auto;
 }
