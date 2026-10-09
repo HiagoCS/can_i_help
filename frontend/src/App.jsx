@@ -5,14 +5,16 @@ import {
     Route,
     Routes
 } from "react-router-dom";
-
+import HomePage from "@/components/folders/home";
 import SystemLayout from "@/components/layout";
 import CashierPage from "@/components/folders/cashier";
 import ProductOverviewPage from "@/components/folders/product_overview";
 import ServicesOverviewPage from "@/components/folders/services_overview";
+import ClientsOverviewPage from "@/components/folders/clients_overview";
 import ProductStockPage from "@/components/folders/product_stock";
 import ProductReportsPage from "@/components/folders/product_reports";
 import ServicesReportsPage from "@/components/folders/services_reports";
+import ClientsReportsPage from "@/components/folders/clients_reports";
 import ClientRegistrationPage from "@/components/folders/client_registration";
 import LoginPage from "@/components/folders/login";
 import SettingsPage from "@/components/folders/settings";
@@ -77,21 +79,61 @@ function App() {
                                 : <Navigate to="/login" replace />
                     }
                 >
+                    <Route index element={<HomePage />} />
+
                     <Route
-                        index
-                        element={<main className="system-home" aria-label="Início do sistema" />}
+                        path="caixa"
+                        element={<CashierPage />}
                     />
-                    <Route path="caixa" element={<CashierPage />} />
-                    <Route path="produtos/visao-geral" element={<ProductOverviewPage />} />
-                    <Route path="produtos/estoque/:productId?" element={<ProductStockPage />} />
-                    <Route path="produtos/relatorios" element={<ProductReportsPage />} />
-                    <Route path="servicos/visao-geral" element={<ServicesOverviewPage />} />
-                    <Route path="servicos/relatorios" element={<ServicesReportsPage />} />
-                    <Route path="clientes/novo" element={<ClientRegistrationPage />} />
-                    <Route path="configuracoes" element={<SettingsPage />} />
+
+                    <Route
+                        path="produtos/visao-geral"
+                        element={<ProductOverviewPage />}
+                    />
+
+                    <Route
+                        path="produtos/estoque/:productId?"
+                        element={<ProductStockPage />}
+                    />
+
+                    <Route
+                        path="produtos/relatorios"
+                        element={<ProductReportsPage />}
+                    />
+
+                    <Route
+                        path="servicos/visao-geral"
+                        element={<ServicesOverviewPage />}
+                    />
+
+                    <Route
+                        path="servicos/relatorios"
+                        element={<ServicesReportsPage />}
+                    />
+
+                    <Route
+                        path="clientes/vendas"
+                        element={<ClientsReportsPage />}
+                    />
+
+                    <Route
+                        path="clientes/visao-geral"
+                        element={<ClientsOverviewPage />}
+                    />
+
+                    <Route
+                        path="clientes/novo"
+                        element={<ClientRegistrationPage />}
+                    />
+
+                    <Route
+                        path="configuracoes"
+                        element={<SettingsPage />}
+                    />
+
                     <Route
                         path="*"
-                        element={<main className="system-home" aria-label="Início do sistema" />}
+                        element={<HomePage />}
                     />
                 </Route>
 

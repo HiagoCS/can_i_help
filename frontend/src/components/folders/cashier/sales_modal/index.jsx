@@ -158,7 +158,15 @@ export default function CashierSalesModal({ onClose }) {
                                     disabled
                                     title="Impressão de XML ainda não disponível."
                                 >
-                                    Imprimir XML
+                                    Cupom Fiscal
+                                </button>
+                                <button
+                                    className="cashier-sales-modal__action cashier-sales-modal__action--xml"
+                                    type="button"
+                                    disabled
+                                    title="Impressão de DANFE ainda não disponível."
+                                >
+                                    DANFE
                                 </button>
                                 <button
                                     className="cashier-sales-modal__action cashier-sales-modal__action--delete"

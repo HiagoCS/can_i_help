@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: true, // ou use '0.0.0.0'
+      port: 5173,  // porta padrão do Vite
       proxy: {
         '/api': {
           target: apiTarget,
