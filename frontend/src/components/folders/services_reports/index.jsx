@@ -28,6 +28,11 @@ const qty = (value) =>
         maximumFractionDigits: 2
     });
 
+const percentage = (value) =>
+    new Intl.NumberFormat("pt-BR", {
+        maximumFractionDigits: 1
+    }).format(value);
+
 const dateValue = (date) =>
     [
         date.getFullYear(),
@@ -44,7 +49,8 @@ function sumRows(rows) {
             return {
                 revenue: total.revenue + revenue,
                 salesCost: total.salesCost + salesCost,
-                unitsSold: total.unitsSold + (Number(row.units_sold) || 0),
+                unitsSold:
+                    total.unitsSold + (Number(row.units_sold) || 0),
                 unknown:
                     total.unknown +
                     (Number(row.unknown_sale_cost_count) || 0)
@@ -59,44 +65,210 @@ function sumRows(rows) {
     );
 }
 
+/* -------------------------------------------------------------------------- */
+/* GRÁFICO DE PIZZA INTERATIVO                                                */
+/* -------------------------------------------------------------------------- */
+
+function polarPoint(radius, angle) {
+    const radians = ((angle - 90) * Math.PI) / 180;
+
+    return {
+        x: 120 + radius * Math.cos(radians),
+        y: 120 + radius * Math.sin(radians)
+    };
+}
+
+function pieSlicePath(startAngle, endAngle) {
+    const outerRadius = 100;
+    const innerRadius = 58;
+    const angle = endAngle - startAngle;
+
+    if (angle <= 0) return "";
+
+    const outerStart = polarPoint(outerRadius, startAngle);
+    const innerStart = polarPoint(innerRadius, startAngle);
+
+    /*
+     * Uma fatia de 100% precisa de dois arcos externos e dois internos.
+     * Um único arco de 360 graus não é representado corretamente pelo SVG.
+     */
+    if (angle >= 359.999) {
+        const middleAngle = startAngle + 180;
+
+        const outerMiddle = polarPoint(outerRadius, middleAngle);
+        const innerMiddle = polarPoint(innerRadius, middleAngle);
+
+        const outerEnd = polarPoint(outerRadius, endAngle);
+        const innerEnd = polarPoint(innerRadius, endAngle);
+
+        return [
+            `M ${outerStart.x} ${outerStart.y}`,
+            `A ${outerRadius} ${outerRadius} 0 1 1 ${outerMiddle.x} ${outerMiddle.y}`,
+            `A ${outerRadius} ${outerRadius} 0 1 1 ${outerEnd.x} ${outerEnd.y}`,
+            `L ${innerEnd.x} ${innerEnd.y}`,
+            `A ${innerRadius} ${innerRadius} 0 1 0 ${innerMiddle.x} ${innerMiddle.y}`,
+            `A ${innerRadius} ${innerRadius} 0 1 0 ${innerStart.x} ${innerStart.y}`,
+            "Z"
+        ].join(" ");
+    }
+
+    const outerEnd = polarPoint(outerRadius, endAngle);
+    const innerEnd = polarPoint(innerRadius, endAngle);
+    const largeArc = angle > 180 ? 1 : 0;
+
+    return [
+        `M ${outerStart.x} ${outerStart.y}`,
+        `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+        `L ${innerEnd.x} ${innerEnd.y}`,
+        `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
+        "Z"
+    ].join(" ");
+}
+
 function PieChart({ rows, small = false }) {
+    const [hoveredIndex, setHoveredIndex] = useState(null);
+    const [focusedIndex, setFocusedIndex] = useState(null);
+
     const values = rows.map((row, index) => ({
+        id: row.id ?? index,
         name: row.name,
         value: Math.max(0, Number(row.revenue) || 0),
         color: pieColors[index % pieColors.length]
     }));
 
-    const total = values.reduce((sum, item) => sum + item.value, 0);
-    let start = 0;
+    const total = values.reduce(
+        (sum, item) => sum + item.value,
+        0
+    );
 
-    const stops = values.map((item) => {
-        const end = total
-            ? start + (item.value / total) * 360
-            : start;
+    const slices = useMemo(() => {
+        let startAngle = 0;
 
-        const stop = `${item.color} ${start}deg ${end}deg`;
-        start = end;
+        return values
+            .filter((item) => item.value > 0)
+            .map((item) => {
+                const angle = total
+                    ? (item.value / total) * 360
+                    : 0;
 
-        return stop;
-    });
+                const slice = {
+                    ...item,
+                    startAngle,
+                    endAngle: startAngle + angle,
+                    percentage: total
+                        ? (item.value / total) * 100
+                        : 0
+                };
+
+                startAngle += angle;
+
+                return slice;
+            });
+    }, [values, total]);
+
+    const activeIndex = focusedIndex ?? hoveredIndex;
+
+    const activeSlice =
+        activeIndex === null ? null : slices[activeIndex] ?? null;
+
+    const pieClassName =
+        "services-reports__pie" +
+        (small ? " services-reports__pie--small" : "");
 
     return (
         <div
-            className={
-                "services-reports__pie" +
-                (small ? " services-reports__pie--small" : "")
-            }
-            style={{
-                background: total
-                    ? `conic-gradient(${stops.join(",")})`
-                    : "#d9dfe2"
-            }}
-            role="img"
-            aria-label={
-                "Receita total dos serviços: " + money(total)
-            }
+            className={pieClassName}
+            role="group"
+            aria-label="Gráfico de participação da receita por serviço"
         >
-            <span>{total ? money(total) : "Sem dados"}</span>
+            <svg
+                className="services-reports__pie-chart"
+                viewBox="0 0 240 240"
+                role="img"
+                aria-label={`Receita total: ${money(total)}`}
+            >
+                <circle
+                    cx="120"
+                    cy="120"
+                    r="100"
+                    fill="#d9dfe2"
+                />
+
+                {slices.map((slice, index) => (
+                    <path
+                        key={slice.id}
+                        className={
+                            "services-reports__pie-slice" +
+                            (activeIndex === index ? " is-hovered" : "")
+                        }
+                        d={pieSlicePath(
+                            slice.startAngle,
+                            slice.endAngle
+                        )}
+                        fill={slice.color}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={
+                            `${slice.name}: ${money(slice.value)}, ` +
+                            `${percentage(slice.percentage)}% da receita`
+                        }
+                        onMouseEnter={() => setHoveredIndex(index)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                        onFocus={() => setFocusedIndex(index)}
+                        onBlur={() =>
+                            setFocusedIndex((current) =>
+                                current === index ? null : current
+                            )
+                        }
+                        onClick={() => setFocusedIndex(index)}
+                        onKeyDown={(event) => {
+                            if (
+                                event.key === "Enter" ||
+                                event.key === " "
+                            ) {
+                                event.preventDefault();
+                                setFocusedIndex(index);
+                            }
+                        }}
+                    />
+                ))}
+
+                <circle
+                    className="services-reports__pie-hole"
+                    cx="120"
+                    cy="120"
+                    r="58"
+                    fill="#fff"
+                    pointerEvents="none"
+                />
+            </svg>
+
+            <div
+                className={
+                    "services-reports__pie-center" +
+                    (activeSlice ? " is-hovered" : "")
+                }
+            >
+                {activeSlice ? (
+                    <>
+                        <span className="services-reports__pie-name">
+                            {activeSlice.name}
+                        </span>
+
+                        <span className="services-reports__pie-value">
+                            {money(activeSlice.value)}
+                        </span>
+
+                        <span className="services-reports__pie-percentage">
+                            {percentage(activeSlice.percentage)}%
+                        </span>
+                    </>
+                ) : (
+                    <span className="services-reports__pie-total">
+                        {total ? money(total) : "Sem dados"}
+                    </span>
+                )}
+            </div>
         </div>
     );
 }
@@ -248,6 +420,7 @@ export default function ServicesReportsPage() {
     );
 
     const allTotals = useMemo(() => sumRows(rows), [rows]);
+
     const selectedTotals = useMemo(
         () => sumRows(selectedRows),
         [selectedRows]

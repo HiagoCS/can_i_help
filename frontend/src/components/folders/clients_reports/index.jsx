@@ -98,42 +98,278 @@ function sumRows(rows) {
     );
 }
 
+/* -------------------------------------------------------------------------- */
+/* PIE CHART INTERATIVO                                                       */
+/* -------------------------------------------------------------------------- */
+
+const PIE_CENTER = 120;
+const PIE_OUTER_RADIUS = 100;
+const PIE_INNER_RADIUS = 58;
+
+function polarPoint(angle, radius) {
+    const radians = (angle * Math.PI) / 180;
+
+    return {
+        x: PIE_CENTER + Math.cos(radians) * radius,
+        y: PIE_CENTER + Math.sin(radians) * radius
+    };
+}
+
+function createDonutSlicePath(startAngle, endAngle) {
+    const sweep = endAngle - startAngle;
+
+    if (sweep <= 0) {
+        return "";
+    }
+
+    // Um único segmento pode representar 100% do gráfico.
+    // Dois arcos são usados porque um arco SVG não desenha
+    // um círculo completo quando início e fim coincidem.
+    if (sweep >= 359.999) {
+        return [
+            `M ${PIE_CENTER} ${PIE_CENTER - PIE_OUTER_RADIUS}`,
+            `A ${PIE_OUTER_RADIUS} ${PIE_OUTER_RADIUS} 0 1 1 ${PIE_CENTER} ${PIE_CENTER + PIE_OUTER_RADIUS}`,
+            `A ${PIE_OUTER_RADIUS} ${PIE_OUTER_RADIUS} 0 1 1 ${PIE_CENTER} ${PIE_CENTER - PIE_OUTER_RADIUS}`,
+            `L ${PIE_CENTER} ${PIE_CENTER - PIE_INNER_RADIUS}`,
+            `A ${PIE_INNER_RADIUS} ${PIE_INNER_RADIUS} 0 1 0 ${PIE_CENTER} ${PIE_CENTER + PIE_INNER_RADIUS}`,
+            `A ${PIE_INNER_RADIUS} ${PIE_INNER_RADIUS} 0 1 0 ${PIE_CENTER} ${PIE_CENTER - PIE_INNER_RADIUS}`,
+            "Z"
+        ].join(" ");
+    }
+
+    const startOuter = polarPoint(
+        startAngle,
+        PIE_OUTER_RADIUS
+    );
+
+    const endOuter = polarPoint(
+        endAngle,
+        PIE_OUTER_RADIUS
+    );
+
+    const startInner = polarPoint(
+        startAngle,
+        PIE_INNER_RADIUS
+    );
+
+    const endInner = polarPoint(
+        endAngle,
+        PIE_INNER_RADIUS
+    );
+
+    const largeArc = sweep > 180 ? 1 : 0;
+
+    return [
+        `M ${startOuter.x} ${startOuter.y}`,
+        `A ${PIE_OUTER_RADIUS} ${PIE_OUTER_RADIUS} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}`,
+        `L ${endInner.x} ${endInner.y}`,
+        `A ${PIE_INNER_RADIUS} ${PIE_INNER_RADIUS} 0 ${largeArc} 0 ${startInner.x} ${startInner.y}`,
+        "Z"
+    ].join(" ");
+}
+
 function PieChart({ rows, small = false }) {
-    const values = rows.map((row, index) => ({
-        name: row.name,
-        value: Math.max(0, Number(row.total_spent) || 0),
-        color: pieColors[index % pieColors.length]
-    }));
+    const [hoveredIndex, setHoveredIndex] = useState(null);
 
-    const total = values.reduce((sum, item) => sum + item.value, 0);
-    let start = 0;
+    const values = useMemo(
+        () =>
+            rows.map((row, index) => ({
+                id: row.id ?? index,
+                name: String(
+                    row.name ??
+                    row.client_name ??
+                    "Cliente sem nome"
+                ),
+                value: Math.max(
+                    0,
+                    Number(row.total_spent) || 0
+                ),
+                color: pieColors[index % pieColors.length]
+            })),
+        [rows]
+    );
 
-    const stops = values.map((item) => {
-        const end = total
-            ? start + (item.value / total) * 360
-            : start;
+    const total = values.reduce(
+        (sum, item) => sum + item.value,
+        0
+    );
 
-        const stop = `${item.color} ${start}deg ${end}deg`;
-        start = end;
+    let currentAngle = -90;
 
-        return stop;
+    const segments = values.map((item, index) => {
+        const sweep = total > 0
+            ? (item.value / total) * 360
+            : 0;
+
+        const startAngle = currentAngle;
+        const endAngle = currentAngle + sweep;
+
+        currentAngle = endAngle;
+
+        return {
+            ...item,
+            index,
+            percentage: total > 0
+                ? (item.value / total) * 100
+                : 0,
+            path: createDonutSlicePath(
+                startAngle,
+                endAngle
+            )
+        };
     });
+
+    const hoveredItem =
+        hoveredIndex === null
+            ? null
+            : segments[hoveredIndex] ?? null;
+
+    function clearHover() {
+        setHoveredIndex(null);
+    }
 
     return (
         <div
             className={
                 "clients-reports__pie" +
-                (small ? " clients-reports__pie--small" : "")
+                (small
+                    ? " clients-reports__pie--small"
+                    : "")
             }
-            style={{
-                background: total
-                    ? `conic-gradient(${stops.join(",")})`
-                    : "#d9dfe2"
-            }}
-            role="img"
-            aria-label={"Total gasto pelos clientes: " + money(total)}
+            role="group"
+            aria-label={
+                "Gráfico circular de gastos dos clientes. Total: " +
+                money(total)
+            }
+            onMouseLeave={clearHover}
         >
-            <span>{total ? money(total) : "Sem dados"}</span>
+            <svg
+                className="clients-reports__pie-chart"
+                viewBox="0 0 240 240"
+                role="img"
+                aria-label="Distribuição percentual dos gastos por cliente"
+            >
+                <title>
+                    Distribuição dos gastos por cliente
+                </title>
+
+                {total > 0 ? (
+                    segments.map((item) => {
+                        if (!item.path) {
+                            return null;
+                        }
+
+                        const isHovered =
+                            hoveredIndex === item.index;
+
+                        return (
+                            <path
+                                key={item.id}
+                                d={item.path}
+                                fill={item.color}
+                                className={
+                                    "clients-reports__pie-slice" +
+                                    (isHovered
+                                        ? " is-hovered"
+                                        : "")
+                                }
+                                stroke="#ffffff"
+                                strokeWidth={isHovered ? 4 : 1.5}
+                                tabIndex={0}
+                                role="img"
+                                aria-label={
+                                    `${item.name}: ${money(item.value)}, ` +
+                                    `${item.percentage.toLocaleString(
+                                        "pt-BR",
+                                        {
+                                            maximumFractionDigits: 1
+                                        }
+                                    )}% do total`
+                                }
+                                onMouseEnter={() =>
+                                    setHoveredIndex(item.index)
+                                }
+                                onFocus={() =>
+                                    setHoveredIndex(item.index)
+                                }
+                                onBlur={clearHover}
+                            >
+                                <title>
+                                    {item.name}
+                                    {" — "}
+                                    {money(item.value)}
+                                    {" — "}
+                                    {item.percentage.toLocaleString(
+                                        "pt-BR",
+                                        {
+                                            maximumFractionDigits: 1
+                                        }
+                                    )}
+                                    % do total
+                                </title>
+                            </path>
+                        );
+                    })
+                ) : (
+                    <circle
+                        cx={PIE_CENTER}
+                        cy={PIE_CENTER}
+                        r={PIE_OUTER_RADIUS}
+                        fill="#d9dfe2"
+                    />
+                )}
+
+                <circle
+                    className="clients-reports__pie-hole"
+                    cx={PIE_CENTER}
+                    cy={PIE_CENTER}
+                    r={PIE_INNER_RADIUS - 1}
+                    fill="#ffffff"
+                    pointerEvents="none"
+                />
+            </svg>
+
+            <div
+                className={
+                    "clients-reports__pie-center" +
+                    (hoveredItem
+                        ? " is-hovered"
+                        : "")
+                }
+                aria-live="polite"
+                aria-atomic="true"
+                title={
+                    hoveredItem
+                        ? `${hoveredItem.name}: ${money(hoveredItem.value)}`
+                        : `Total: ${money(total)}`
+                }
+            >
+                {hoveredItem ? (
+                    <>
+                        <strong className="clients-reports__pie-name">
+                            {hoveredItem.name}
+                        </strong>
+
+                        <span className="clients-reports__pie-value">
+                            {money(hoveredItem.value)}
+                        </span>
+
+                        <small className="clients-reports__pie-percentage">
+                            {hoveredItem.percentage.toLocaleString(
+                                "pt-BR",
+                                {
+                                    maximumFractionDigits: 1
+                                }
+                            )}
+                            % do total
+                        </small>
+                    </>
+                ) : (
+                    <span className="clients-reports__pie-total">
+                        {total ? money(total) : "Sem dados"}
+                    </span>
+                )}
+            </div>
         </div>
     );
 }

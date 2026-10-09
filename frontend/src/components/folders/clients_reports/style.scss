@@ -148,7 +148,7 @@
 .clients-reports__bar-group.is-selected .clients-reports__bar {
     filter: brightness(0.82);
     stroke: #15232a;
-    stroke-width: 2;
+    stroke-width: 1;
 }
 
 .clients-reports__bar-group.is-selected
@@ -204,30 +204,203 @@
     font-size: 0.86rem;
 }
 
+/* -------------------------------------------------------------------------- */
+/* PIE CHART INTERATIVO                                                       */
+/* -------------------------------------------------------------------------- */
+
 .clients-reports__pie {
+    position: relative;
+    isolation: isolate;
+
     width: min(100%, 13.5rem);
     aspect-ratio: 1;
-    border-radius: 50%;
+
+    flex: 0 0 auto;
+
     display: grid;
     place-items: center;
+
+    border-radius: 50%;
+    overflow: visible;
 }
 
-.clients-reports__pie span {
-    width: 42%;
-    aspect-ratio: 1;
-    display: grid;
-    place-items: center;
+.clients-reports__pie-chart {
+    position: absolute;
+    inset: 0;
+
+    display: block;
+    width: 100%;
+    height: 100%;
+
+    overflow: visible;
+}
+
+.clients-reports__pie-slice {
+    cursor: pointer;
+    stroke-linejoin: round;
+    transform-box: fill-box;
+    transform-origin: center;
+
+    transition:
+        filter 0.16s ease,
+        stroke-width 0.16s ease,
+        opacity 0.16s ease,
+        transform 0.16s ease;
+
+    &:hover,
+    &.is-hovered {
+        filter: brightness(0.86) drop-shadow(
+            0 2px 3px rgba(0, 0, 0, 0.24)
+        );
+        stroke: #17242c;
+        stroke-width: 3.5;
+        transform: scale(1.025);
+    }
+
+    &:focus {
+        outline: none;
+        filter: brightness(0.86) drop-shadow(
+            0 2px 3px rgba(0, 0, 0, 0.24)
+        );
+        stroke: #17242c;
+        stroke-width: 3.5;
+    }
+
+    &:focus-visible {
+        stroke: #075fc4;
+        stroke-width: 5;
+    }
+}
+
+.clients-reports__pie-hole {
+    transition: fill 0.15s ease;
+}
+
+/*
+ * Conteúdo central:
+ * total no estado normal; nome, valor e percentual ao passar
+ * o mouse sobre uma fatia ou ao navegar entre elas pelo teclado.
+ */
+.clients-reports__pie-center {
+    position: absolute;
+    z-index: 1;
+
+    width: 47%;
+    height: 47%;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+
+    padding: 0.25rem;
+
+    overflow: hidden;
     border-radius: 50%;
     background: #fff;
+
     color: #34464f;
-    font-size: 0.72rem;
+    text-align: center;
+
+    pointer-events: none;
+
+    transition:
+        background-color 0.15s ease,
+        box-shadow 0.15s ease;
+
+    &.is-hovered {
+        background: #f7fbff;
+        box-shadow: inset 0 0 0 1px #d8e7f0;
+    }
+}
+
+.clients-reports__pie-total {
+    display: block;
+    max-width: 100%;
+    color: #34464f;
+    font-size: clamp(1.0rem, 0.75vw, 0.72rem);
     font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.clients-reports__pie-name {
+    display: -webkit-box;
+    width: 100%;
+    max-width: 100%;
+
+    overflow: hidden;
+    overflow-wrap: anywhere;
+
+    color: #203442;
+    font-size: clamp(0.55rem, 0.72vw, 0.68rem);
+    font-weight: 700;
+    line-height: 1.15;
+
+    text-align: center;
+
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.clients-reports__pie-value {
+    display: block;
+    max-width: 100%;
+
+    color: #16843b;
+    font-size: clamp(0.58rem, 0.75vw, 0.72rem);
+    font-weight: 700;
+    line-height: 1.15;
+
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.clients-reports__pie-percentage {
+    display: block;
+    max-width: 100%;
+
+    color: #64737b;
+    font-size: clamp(0.48rem, 0.62vw, 0.58rem);
+    line-height: 1.1;
+
+    overflow-wrap: anywhere;
     text-align: center;
 }
 
 .clients-reports__pie--small {
-    width: min(48%, 10rem);
-    flex: 0 1 10rem;
+    width: min(100%, 24rem);
+    flex: 0 1 24rem;
+
+    .clients-reports__pie-center {
+        width: 47%;
+        height: 47%;
+        gap: 0.12rem;
+        padding: 0.15rem;
+    }
+
+    .clients-reports__pie-total {
+        font-size: 1.0rem;
+    }
+
+    .clients-reports__pie-name {
+        font-size: .90rem;
+        line-height: 1.08;
+        -webkit-line-clamp: 3;
+    }
+
+    .clients-reports__pie-value {
+        font-size: 1.0rem;
+        line-height: 1.08;
+    }
+
+    .clients-reports__pie-percentage {
+        font-size: 0.80rem;
+        line-height: 1.05;
+    }
 }
 
 .clients-reports__metrics {
@@ -543,6 +716,18 @@
     .clients-reports__chart svg {
         min-height: 17rem;
     }
+
+    .clients-reports__pie-name {
+        font-size: 0.62rem;
+    }
+
+    .clients-reports__pie-value {
+        font-size: 0.64rem;
+    }
+
+    .clients-reports__pie-percentage {
+        font-size: 0.52rem;
+    }
 }
 
 @media (max-width: 420px) {
@@ -556,5 +741,29 @@
 
     .clients-reports__net {
         flex-wrap: wrap;
+    }
+
+    .clients-reports__pie--small {
+        width: min(48%, 8rem);
+    }
+
+    .clients-reports__pie--small .clients-reports__pie-name {
+        font-size: 0.43rem;
+    }
+
+    .clients-reports__pie--small .clients-reports__pie-value {
+        font-size: 0.46rem;
+    }
+
+    .clients-reports__pie--small .clients-reports__pie-percentage {
+        font-size: 0.4rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clients-reports__pie-slice,
+    .clients-reports__pie-center,
+    .clients-reports__pie-hole {
+        transition: none;
     }
 }

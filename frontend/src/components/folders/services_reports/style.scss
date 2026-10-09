@@ -4,12 +4,17 @@
     display: flex;
     flex-direction: column;
     color: #102c3b;
-    background: linear-gradient(108deg, #ff9915 0%, #d1a15d 53%, #6eafd5 100%);
+    background: linear-gradient(
+        108deg,
+        #ff9915 0%,
+        #d1a15d 53%,
+        #6eafd5 100%
+    );
 }
 
 .services-reports__header {
     min-height: clamp(4.25rem, 8vh, 5.2rem);
-    padding: .5rem 1.2rem;
+    padding: 0.5rem 1.2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -40,66 +45,69 @@
 .services-reports__content {
     width: min(100%, 118rem);
     margin: 0 auto;
-    padding: clamp(.65rem, 1.3vw, 1.2rem);
+    padding: clamp(0.65rem, 1.3vw, 1.2rem);
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: clamp(.8rem, 1.5vw, 1.25rem);
+    gap: clamp(0.8rem, 1.5vw, 1.25rem);
 }
 
 .services-reports__visuals {
     min-width: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.85fr) minmax(16rem, .95fr) minmax(18rem, 1.1fr);
-    gap: .55rem;
+    grid-template-columns:
+        minmax(0, 1.85fr)
+        minmax(16rem, 0.95fr)
+        minmax(18rem, 1.1fr);
+    gap: 0.55rem;
 }
 
 .services-reports__panel {
     min-width: 0;
     min-height: clamp(24rem, 62vh, 38rem);
-    padding: clamp(.8rem, 1.15vw, 1.15rem);
+    padding: clamp(0.8rem, 1.15vw, 1.15rem);
     border: 2px solid #000;
-    border-radius: .3rem;
+    border-radius: 0.3rem;
     background: #fff;
 }
 
 .services-reports__panel h2 {
     margin: 0;
     color: #333;
-    font-size: clamp(.95rem, 1.2vw, 1.15rem);
+    font-size: clamp(0.95rem, 1.2vw, 1.15rem);
     text-align: center;
 }
 
 .services-reports__bars {
     display: flex;
     flex-direction: column;
-    gap: .7rem;
+    gap: 0.7rem;
 }
 
 .services-reports__panel-title {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: .65rem;
+    gap: 0.65rem;
 }
 
 .services-reports__legend {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: .85rem;
-    font-size: .78rem;
+    gap: 0.85rem;
+    font-size: 0.78rem;
 }
 
 .services-reports__legend span {
     display: flex;
     align-items: center;
-    gap: .32rem;
+    gap: 0.32rem;
 }
 
 .services-reports__legend i {
     width: 1.2rem;
-    height: .65rem;
+    height: 0.65rem;
     display: inline-block;
 }
 
@@ -109,7 +117,7 @@
     display: grid;
     grid-template-columns: 2rem minmax(0, 1fr) 2rem;
     align-items: center;
-    gap: .25rem;
+    gap: 0.25rem;
 }
 
 .services-reports__chart svg {
@@ -138,25 +146,28 @@
 
 .services-reports__bar-group:focus-visible .services-reports__bar,
 .services-reports__bar-group.is-selected .services-reports__bar {
-    filter: brightness(.82);
+    filter: brightness(0.82);
     stroke: #15232a;
     stroke-width: 2;
 }
 
-.services-reports__bar-group.is-selected .services-reports__bar-label {
+.services-reports__bar-group.is-selected
+    .services-reports__bar-label {
     font-weight: 700;
     fill: #1478ed;
 }
 
 .services-reports__bar {
-    transition: filter .12s, stroke-width .12s;
+    transition:
+        filter 0.12s,
+        stroke-width 0.12s;
 }
 
 .services-reports__chart > button {
     width: 2rem;
     height: 2.6rem;
     border: 0;
-    border-radius: .3rem;
+    border-radius: 0.3rem;
     background: #51a8f0;
     color: #fff;
     font-size: 1.5rem;
@@ -164,15 +175,16 @@
 }
 
 .services-reports__chart > button:disabled {
-    opacity: .45;
+    opacity: 0.45;
     cursor: not-allowed;
 }
 
 .services-reports__chart-page {
     margin: 0;
     color: #536673;
-    font-size: .76rem;
+    font-size: 0.76rem;
     text-align: center;
+    line-height: 1.5;
 }
 
 .services-reports__selected {
@@ -189,50 +201,229 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #555;
-    font-size: .86rem;
+    font-size: 0.86rem;
 }
+
+/* -------------------------------------------------------------------------- */
+/* GRÁFICO DE PIZZA INTERATIVO                                                */
+/* -------------------------------------------------------------------------- */
 
 .services-reports__pie {
+    position: relative;
+    isolation: isolate;
+
     width: min(100%, 13.5rem);
     aspect-ratio: 1;
-    border-radius: 50%;
+
+    flex: 0 0 auto;
+
     display: grid;
     place-items: center;
+
+    border-radius: 50%;
+    overflow: visible;
 }
 
-.services-reports__pie span {
-    width: 42%;
-    aspect-ratio: 1;
-    display: grid;
-    place-items: center;
+.services-reports__pie-chart {
+    position: absolute;
+    inset: 0;
+
+    display: block;
+    width: 100%;
+    height: 100%;
+
+    overflow: visible;
+}
+
+.services-reports__pie-slice {
+    cursor: pointer;
+    stroke-linejoin: round;
+
+    transform-box: fill-box;
+    transform-origin: center;
+
+    transition:
+        filter 0.16s ease,
+        stroke-width 0.16s ease,
+        opacity 0.16s ease,
+        transform 0.16s ease;
+
+    &:hover,
+    &.is-hovered {
+        filter: brightness(0.86) drop-shadow(
+            0 2px 3px rgba(0, 0, 0, 0.24)
+        );
+        stroke: #17242c;
+        stroke-width: 3.5;
+        transform: scale(1.025);
+    }
+
+    &:focus {
+        outline: none;
+        filter: brightness(0.86) drop-shadow(
+            0 2px 3px rgba(0, 0, 0, 0.24)
+        );
+        stroke: #17242c;
+        stroke-width: 3.5;
+    }
+
+    &:focus-visible {
+        stroke: #075fc4;
+        stroke-width: 5;
+    }
+}
+
+.services-reports__pie-hole {
+    transition: fill 0.15s ease;
+    pointer-events: none;
+}
+
+/*
+ * Conteúdo central:
+ * mostra a receita total normalmente.
+ * Ao passar o mouse ou focar uma fatia, exibe o nome do serviço,
+ * o valor correspondente e o percentual da receita representado.
+ */
+.services-reports__pie-center {
+    position: absolute;
+    z-index: 1;
+
+    width: 47%;
+    height: 47%;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+
+    padding: 0.25rem;
+
+    overflow: hidden;
     border-radius: 50%;
     background: #fff;
+
     color: #34464f;
-    font-size: .72rem;
+    text-align: center;
+
+    pointer-events: none;
+
+    transition:
+        background-color 0.15s ease,
+        box-shadow 0.15s ease;
+
+    &.is-hovered {
+        background: #f7fbff;
+        box-shadow: inset 0 0 0 1px #d8e7f0;
+    }
+}
+
+.services-reports__pie-total {
+    display: block;
+    max-width: 100%;
+
+    color: #34464f;
+    font-size: clamp(0.72rem, 0.75vw, 1rem);
     font-weight: 700;
+    line-height: 1.2;
+
+    overflow-wrap: anywhere;
     text-align: center;
 }
 
+.services-reports__pie-name {
+    display: -webkit-box;
+    width: 100%;
+    max-width: 100%;
+
+    overflow: hidden;
+    overflow-wrap: anywhere;
+
+    color: #203442;
+    font-size: clamp(0.55rem, 0.72vw, 0.68rem);
+    font-weight: 700;
+    line-height: 1.15;
+
+    text-align: center;
+
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.services-reports__pie-value {
+    display: block;
+    max-width: 100%;
+
+    color: #16843b;
+    font-size: clamp(0.58rem, 0.75vw, 0.72rem);
+    font-weight: 700;
+    line-height: 1.15;
+
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.services-reports__pie-percentage {
+    display: block;
+    max-width: 100%;
+
+    color: #64737b;
+    font-size: clamp(0.48rem, 0.62vw, 0.58rem);
+    line-height: 1.1;
+
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+/* Gráfico maior utilizado na visualização dos serviços selecionados. */
 .services-reports__pie--small {
-    width: min(48%, 10rem);
-    flex: 0 1 10rem;
+    width: min(100%, 24rem);
+    flex: 0 1 24rem;
+
+    .services-reports__pie-center {
+        width: 47%;
+        height: 47%;
+        gap: 0.12rem;
+        padding: 0.15rem;
+    }
+
+    .services-reports__pie-total {
+        font-size: 1rem;
+    }
+
+    .services-reports__pie-name {
+        font-size: 0.9rem;
+        line-height: 1.08;
+        -webkit-line-clamp: 3;
+    }
+
+    .services-reports__pie-value {
+        font-size: 1rem;
+        line-height: 1.08;
+    }
+
+    .services-reports__pie-percentage {
+        font-size: 0.8rem;
+        line-height: 1.05;
+    }
 }
 
 .services-reports__metrics {
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: .38rem;
+    gap: 0.38rem;
 }
 
 .services-reports__metrics p {
     margin: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: .4rem;
+    gap: 0.4rem;
     align-items: center;
     color: #203442;
-    font-size: .76rem;
+    font-size: 0.76rem;
 }
 
 .services-reports__metrics p strong {
@@ -249,18 +440,18 @@
     color: #d99116;
 }
 
-.services-reports__metrics small {
-    color: #64737b;
-    font-size: .7rem;
-    line-height: 1.35;
-}
-
 .services-reports__metrics .is-gain {
     color: #16843b;
 }
 
 .services-reports__metrics .is-loss {
     color: #df3045;
+}
+
+.services-reports__metrics small {
+    color: #64737b;
+    font-size: 0.7rem;
+    line-height: 1.35;
 }
 
 .services-reports__empty {
@@ -273,14 +464,14 @@
 .services-reports__totals {
     display: flex;
     flex-direction: column;
-    gap: .8rem;
+    gap: 0.8rem;
 }
 
 .services-reports__total-list {
     display: flex;
     flex-direction: column;
-    gap: .35rem;
-    padding: .15rem 0 .7rem;
+    gap: 0.35rem;
+    padding: 0.15rem 0 0.7rem;
     border-bottom: 1px solid #111;
 }
 
@@ -288,10 +479,10 @@
     margin: 0;
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: .6rem;
+    gap: 0.6rem;
     align-items: center;
-    font-size: clamp(.95rem, 1.25vw, 1.25rem);
-    letter-spacing: .05em;
+    font-size: clamp(0.95rem, 1.25vw, 1.25rem);
+    letter-spacing: 0.05em;
 }
 
 .services-reports__total-list p:nth-child(1) b {
@@ -315,7 +506,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: clamp(.8rem, 1.3vw, 1.35rem);
+    gap: clamp(0.8rem, 1.3vw, 1.35rem);
 }
 
 .services-reports__net > div:last-child {
@@ -323,14 +514,14 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: .5rem;
-    padding-left: clamp(.8rem, 1.5vw, 1.5rem);
+    gap: 0.5rem;
+    padding-left: clamp(0.8rem, 1.5vw, 1.5rem);
     border-left: 3px solid #111;
     color: #18313e;
 }
 
 .services-reports__net strong {
-    font-size: .86rem;
+    font-size: 0.86rem;
     font-weight: 500;
     white-space: nowrap;
 }
@@ -354,37 +545,37 @@
 
 .services-reports__notice {
     color: #68777e;
-    font-size: .72rem;
+    font-size: 0.72rem;
     line-height: 1.4;
 }
 
 .services-reports__exports {
     width: min(100%, 68rem);
     min-height: 7rem;
-    padding: .75rem;
+    padding: 0.75rem;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: center;
-    gap: clamp(.5rem, 2vw, 1.5rem);
+    gap: clamp(0.5rem, 2vw, 1.5rem);
     border: 2px solid #000;
-    border-radius: .3rem;
+    border-radius: 0.3rem;
     background: #fff;
 }
 
 .services-reports__exports button,
 .services-reports__modal-actions button {
     min-height: 2.75rem;
-    padding: .55rem .8rem;
+    padding: 0.55rem 0.8rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: .3rem;
+    gap: 0.3rem;
     border: 0;
-    border-radius: .35rem;
+    border-radius: 0.35rem;
     background: #1478ed;
     color: #fff;
     font: inherit;
-    font-size: clamp(.78rem, 1vw, .95rem);
+    font-size: clamp(0.78rem, 1vw, 0.95rem);
     font-weight: 700;
     text-align: center;
     cursor: pointer;
@@ -397,15 +588,15 @@
 
 .services-reports__exports button:disabled,
 .services-reports__modal-actions button:disabled {
-    opacity: .5;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .services-reports__error {
     margin: 0;
-    padding: .6rem .8rem;
+    padding: 0.6rem 0.8rem;
     border: 1px solid #b02b35;
-    border-radius: .35rem;
+    border-radius: 0.35rem;
     background: #fff1f1;
     color: #8e1722;
     font-weight: 700;
@@ -427,15 +618,15 @@
     padding: clamp(1.25rem, 4vw, 2rem);
     display: flex;
     flex-direction: column;
-    gap: .8rem;
+    gap: 0.8rem;
     border: 2px solid #000;
-    border-radius: .4rem;
+    border-radius: 0.4rem;
     background: #fff;
-    box-shadow: 0 .75rem 2rem #0004;
+    box-shadow: 0 0.75rem 2rem #0004;
 }
 
 .services-reports__date-modal h2 {
-    margin: 0 0 .35rem;
+    margin: 0 0 0.35rem;
     color: #39474f;
     font-size: 1.35rem;
     text-align: center;
@@ -444,17 +635,17 @@
 .services-reports__date-modal label {
     display: flex;
     flex-direction: column;
-    gap: .3rem;
+    gap: 0.3rem;
     color: #243742;
-    font-size: .86rem;
+    font-size: 0.86rem;
     font-weight: 700;
 }
 
 .services-reports__date-modal input {
     min-height: 2.5rem;
-    padding: .45rem .6rem;
+    padding: 0.45rem 0.6rem;
     border: 1px solid #111;
-    border-radius: .3rem;
+    border-radius: 0.3rem;
     background: #fff;
     color: #243742;
     font: inherit;
@@ -462,8 +653,8 @@
 
 .services-reports__close {
     position: absolute;
-    top: .25rem;
-    right: .55rem;
+    top: 0.25rem;
+    right: 0.55rem;
     border: 0;
     background: transparent;
     color: #38474e;
@@ -474,17 +665,23 @@
 .services-reports__modal-actions {
     display: flex;
     justify-content: flex-end;
-    gap: .55rem;
-    margin-top: .35rem;
+    gap: 0.55rem;
+    margin-top: 0.35rem;
 }
 
 .services-reports__modal-actions button:first-child {
     background: #737f87;
 }
 
+/* -------------------------------------------------------------------------- */
+/* RESPONSIVIDADE                                                             */
+/* -------------------------------------------------------------------------- */
+
 @media (max-width: 1180px) {
     .services-reports__visuals {
-        grid-template-columns: minmax(0, 1.5fr) minmax(15rem, 1fr);
+        grid-template-columns:
+            minmax(0, 1.5fr)
+            minmax(15rem, 1fr);
     }
 
     .services-reports__totals {
@@ -502,8 +699,8 @@
         align-items: flex-start;
         flex-direction: column;
         justify-content: center;
-        gap: .25rem;
-        padding-block: .7rem;
+        gap: 0.25rem;
+        padding-block: 0.7rem;
     }
 
     .services-reports__header span {
@@ -534,6 +731,18 @@
     .services-reports__chart svg {
         min-height: 17rem;
     }
+
+    .services-reports__pie-name {
+        font-size: 0.62rem;
+    }
+
+    .services-reports__pie-value {
+        font-size: 0.64rem;
+    }
+
+    .services-reports__pie-percentage {
+        font-size: 0.52rem;
+    }
 }
 
 @media (max-width: 420px) {
@@ -542,10 +751,35 @@
     }
 
     .services-reports__metrics p {
-        font-size: .72rem;
+        font-size: 0.72rem;
     }
 
     .services-reports__net {
         flex-wrap: wrap;
+    }
+
+    .services-reports__pie--small {
+        width: min(48%, 8rem);
+        flex: 0 1 8rem;
+    }
+
+    .services-reports__pie--small .services-reports__pie-name {
+        font-size: 0.43rem;
+    }
+
+    .services-reports__pie--small .services-reports__pie-value {
+        font-size: 0.46rem;
+    }
+
+    .services-reports__pie--small .services-reports__pie-percentage {
+        font-size: 0.4rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .services-reports__pie-slice,
+    .services-reports__pie-center,
+    .services-reports__pie-hole {
+        transition: none;
     }
 }
