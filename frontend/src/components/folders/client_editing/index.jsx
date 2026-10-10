@@ -11,13 +11,11 @@ const INITIAL_FORM = {
     name: "",
     cpf: "",
     cnpj: "",
-    ie: "",
     address: "",
     number: "",
     complement: "",
     neighborhood: "",
     city: "",
-    city_ibge: "",
     state: "",
     zip_code: ""
 };
@@ -58,13 +56,11 @@ function normalizeClient(client) {
         name: String(client.name ?? ""),
         cpf: onlyDigits(client.cpf),
         cnpj: onlyDigits(client.cnpj),
-        ie: String(client.ie ?? ""),
         address: String(client.address ?? ""),
         number: String(client.number ?? ""),
         complement: String(client.complement ?? ""),
         neighborhood: String(client.neighborhood ?? ""),
         city: String(client.city ?? ""),
-        city_ibge: onlyDigits(client.city_ibge).slice(0, 7),
         state: String(client.state ?? "").toUpperCase().slice(0, 2),
         zip_code: onlyDigits(client.zip_code).slice(0, 8)
     };
@@ -179,6 +175,7 @@ export default function ClientEditingPage() {
                 }
 
                 setForm(normalizeClient(client));
+                console.log("Client data loaded:", client);
             } catch (error) {
                 if (isMounted && !controller.signal.aborted) {
                     setErrorMessage(getErrorMessage(error));
@@ -220,10 +217,6 @@ export default function ClientEditingPage() {
         updateField("zip_code", onlyDigits(value).slice(0, 8));
     }
 
-    function handleCityIbgeChange(value) {
-        updateField("city_ibge", onlyDigits(value).slice(0, 7));
-    }
-
     function handleStateChange(value) {
         updateField("state", value.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 2));
     }
@@ -243,10 +236,6 @@ export default function ClientEditingPage() {
 
         if (form.zip_code && form.zip_code.length !== 8) {
             return "O CEP deve conter 8 dígitos.";
-        }
-
-        if (form.city_ibge && form.city_ibge.length !== 7) {
-            return "O código IBGE do município deve conter 7 dígitos.";
         }
 
         if (form.state && form.state.length !== 2) {
@@ -288,13 +277,11 @@ export default function ClientEditingPage() {
             name: form.name.trim(),
             cpf: form.cpf || null,
             cnpj: form.cnpj || null,
-            ie: form.ie.trim() || null,
             address: form.address.trim() || null,
             number: form.number.trim() || null,
             complement: form.complement.trim() || null,
             neighborhood: form.neighborhood.trim() || null,
             city: form.city.trim() || null,
-            city_ibge: form.city_ibge || null,
             state: form.state || null,
             zip_code: form.zip_code || null
         };
@@ -413,21 +400,6 @@ export default function ClientEditingPage() {
                                             }
                                         />
                                     </label>
-
-                                    <label className="client-editing__field">
-                                        <span>Inscrição Estadual (IE)</span>
-                                        <input
-                                            autoComplete="off"
-                                            maxLength={30}
-                                            value={form.ie}
-                                            onChange={(event) =>
-                                                updateField(
-                                                    "ie",
-                                                    event.target.value
-                                                )
-                                            }
-                                        />
-                                    </label>
                                 </div>
                             </section>
 
@@ -504,22 +476,6 @@ export default function ClientEditingPage() {
                                             onChange={(event) =>
                                                 updateField(
                                                     "city",
-                                                    event.target.value
-                                                )
-                                            }
-                                        />
-                                    </label>
-
-                                    <label className="client-editing__field">
-                                        <span>Código IBGE do município</span>
-                                        <input
-                                            inputMode="numeric"
-                                            autoComplete="off"
-                                            placeholder="0000000"
-                                            maxLength={7}
-                                            value={form.city_ibge}
-                                            onChange={(event) =>
-                                                handleCityIbgeChange(
                                                     event.target.value
                                                 )
                                             }

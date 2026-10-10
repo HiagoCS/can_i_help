@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
 import { getCriticalSettings } from "@/data/api/settings";
-import CertificateSection from "./certificate_section";
 import CompanySection from "./company_section";
-import FiscalSection from "./fiscal_section";
 import OnlineUsers from "./online_users";
 import ProfileSection from "./profile_section";
 import SystemSection from "./system_section";
@@ -60,14 +58,10 @@ export default function SettingsPage() {
 
     const sections = [
         { id: "profile", label: "Usuário / Perfil" },
-        { id: "system", label: "Funcionamento do sistema" },
-        ...(canManageUsers ? [
-            { id: "users", label: "Controle de usuários" }
-        ] : []),
         ...(isLevelThree ? [
-            { id: "fiscal", label: "Configuração Fiscal", critical: true },
+            { id: "users", label: "Controle de usuários", critical: true },
             { id: "company", label: "Empresa", critical: true },
-            { id: "certificate", label: "Certificado Digital", critical: true }
+            { id: "system", label: "Funcionamento do sistema", critical: true }
         ] : [])
     ];
 
@@ -138,24 +132,11 @@ export default function SettingsPage() {
                         {!isLoading && activeSection === "users" && canManageUsers && (
                             <UsersSection currentUserId={user?.id} currentLevel={userLevel} />
                         )}
-                        {!isLoading && activeSection === "fiscal" && isLevelThree && (
-                            <FiscalSection
-                                fiscalData={critical?.fiscal}
-                                hasCompany={Boolean(critical?.company)}
-                                onSaved={updateFiscal}
-                            />
-                        )}
                         {!isLoading && activeSection === "company" && isLevelThree && (
                             <CompanySection
                                 companyData={critical?.company}
                                 users={critical?.users ?? []}
                                 onSaved={updateCompany}
-                            />
-                        )}
-                        {!isLoading && activeSection === "certificate" && isLevelThree && (
-                            <CertificateSection
-                                certificateData={critical?.certificate}
-                                onSaved={updateCertificate}
                             />
                         )}
                     </div>

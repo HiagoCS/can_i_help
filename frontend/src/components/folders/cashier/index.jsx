@@ -287,6 +287,7 @@ function ProductSearchField({
                 <input
                     type="search"
                     autoComplete="off"
+
                     value={value}
                     placeholder={placeholder}
                     onChange={(event) => onChange(event.target.value)}
@@ -1157,7 +1158,7 @@ export default function CashierPage() {
                     POSSO AJUDAR?
                 </h1>
 
-                <span className="cashier-header__page-title">
+                <span className="cashier-header__page-title" style={{paddingRight: "50px"}}>
                     Caixa
                 </span>
             </header>

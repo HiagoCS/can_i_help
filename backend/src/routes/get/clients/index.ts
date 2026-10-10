@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
 
-
 function normalizeDigits(value: string): string {
     return value.replace(/\D/g, "");
 }
@@ -25,25 +24,16 @@ function isValidDate(value?: string): boolean {
 }
 
 async function clients(fastify: FastifyInstance) {
-
     // ============================================================
     // GET CLIENTS REPORTS
     // GET /clients/reports?search=&from=YYYY-MM-DD&to=YYYY-MM-DD
-    //
     // Retorna clientes, vendas e itens comprados.
     // ============================================================
-
     fastify.get(
         "/clients/reports",
-        {
-            onRequest: [fastify.authenticate]
-        },
+        { onRequest: [fastify.authenticate] },
         async (request, reply) => {
-            const {
-                search: searchQuery,
-                from,
-                to
-            } = (request.query ?? {}) as {
+            const { search: searchQuery, from, to } = (request.query ?? {}) as {
                 search?: string;
                 from?: string;
                 to?: string;
@@ -64,10 +54,7 @@ async function clients(fastify: FastifyInstance) {
                 });
             }
 
-            // ----------------------------------------------------
-            // FILTRO DE DATA APLICADO AO LEFT JOIN
-            // ----------------------------------------------------
-
+            // O filtro de data fica no LEFT JOIN para manter clientes sem vendas.
             const dateFilters: string[] = [];
             const dateParams: string[] = [];
 
@@ -96,10 +83,6 @@ async function clients(fastify: FastifyInstance) {
                 digitsSearch
             ];
 
-            // ----------------------------------------------------
-            // CONSULTA DO RELATÓRIO
-            // ----------------------------------------------------
-
             const rows = sqlite
                 .prepare(`
                     SELECT
@@ -107,6 +90,13 @@ async function clients(fastify: FastifyInstance) {
                         cl.name AS client_name,
                         cl.cpf,
                         cl.cnpj,
+                        cl.address AS client_address,
+                        cl.number AS client_number,
+                        cl.complement AS client_complement,
+                        cl.neighborhood AS client_neighborhood,
+                        cl.city AS client_city,
+                        cl.state AS client_state,
+                        cl.zip_code AS client_zip_code,
 
                         c.id AS sale_id,
                         c.dt_sale,
@@ -119,57 +109,28 @@ async function clients(fastify: FastifyInstance) {
                         ss.qunt_sale AS quantity,
                         ss.unit_measure,
 
-                        COALESCE(
-                            p.name,
-                            s.name
-                        ) AS item_name,
-
-                        COALESCE(
-                            p.sm_code,
-                            s.sm_code
-                        ) AS item_sm_code,
-
-                        COALESCE(
-                            p.bar_code,
-                            s.bar_code
-                        ) AS item_bar_code,
+                        COALESCE(p.name, s.name) AS item_name,
+                        COALESCE(p.sm_code, s.sm_code) AS item_sm_code,
+                        COALESCE(p.bar_code, s.bar_code) AS item_bar_code,
 
                         CASE
-                            WHEN ss.product_id IS NOT NULL
-                                THEN 'product'
-                            WHEN ss.service_id IS NOT NULL
-                                THEN 'service'
+                            WHEN ss.product_id IS NOT NULL THEN 'product'
+                            WHEN ss.service_id IS NOT NULL THEN 'service'
                             ELSE 'unknown'
                         END AS item_type,
 
                         COALESCE(
                             CAST(ss.value AS REAL),
-
                             CASE
-                                WHEN ss.product_id IS NOT NULL
-                                THEN CAST(
-                                    COALESCE(p.value, '0')
-                                    AS REAL
-                                )
-
-                                WHEN ss.service_id IS NOT NULL
-                                THEN
-                                    CAST(
-                                        COALESCE(s.cost, '0')
-                                        AS REAL
-                                    )
-                                    +
+                                WHEN ss.product_id IS NOT NULL THEN
+                                    CAST(COALESCE(p.value, '0') AS REAL)
+                                WHEN ss.service_id IS NOT NULL THEN
+                                    CAST(COALESCE(s.cost, '0') AS REAL) +
                                     COALESCE(
                                         (
                                             SELECT SUM(
-                                                CAST(
-                                                    COALESCE(p2.value, '0')
-                                                    AS REAL
-                                                ) *
-                                                CAST(
-                                                    COALESCE(ssv.qunt, 0)
-                                                    AS REAL
-                                                )
+                                                CAST(COALESCE(p2.value, '0') AS REAL) *
+                                                CAST(COALESCE(ssv.qunt, 0) AS REAL)
                                             )
                                             FROM stock_service ssv
                                             INNER JOIN products p2
@@ -178,78 +139,37 @@ async function clients(fastify: FastifyInstance) {
                                         ),
                                         0
                                     )
-
                                 ELSE 0
                             END
                         ) AS item_unit_value
 
                     FROM clients cl
-
                     LEFT JOIN cashier c
                         ON c.client_id = cl.id
                         ${dateClause}
-
                     LEFT JOIN payment_method pm
                         ON pm.id = c.method_id
-
                     LEFT JOIN stock_sale ss
                         ON ss.sale_id = c.id
-
                     LEFT JOIN products p
                         ON p.id = ss.product_id
-
                     LEFT JOIN services s
                         ON s.id = ss.service_id
 
-                    WHERE
-                        (
-                            ? = ''
-                            OR cl.name LIKE ?
-                            OR cl.cpf LIKE ?
-                            OR cl.cnpj LIKE ?
-
-                            OR (
-                                ? <> ''
-                                AND REPLACE(
-                                    REPLACE(
-                                        REPLACE(
-                                            REPLACE(
-                                                cl.cpf,
-                                                '.',
-                                                ''
-                                            ),
-                                            '-',
-                                            ''
-                                        ),
-                                        '/',
-                                        ''
-                                    ),
-                                    ' ',
-                                    ''
-                                ) LIKE ?
-                            )
-
-                            OR (
-                                ? <> ''
-                                AND REPLACE(
-                                    REPLACE(
-                                        REPLACE(
-                                            REPLACE(
-                                                cl.cnpj,
-                                                '.',
-                                                ''
-                                            ),
-                                            '-',
-                                            ''
-                                        ),
-                                        '/',
-                                        ''
-                                    ),
-                                    ' ',
-                                    ''
-                                ) LIKE ?
-                            )
+                    WHERE (
+                        ? = ''
+                        OR cl.name LIKE ?
+                        OR cl.cpf LIKE ?
+                        OR cl.cnpj LIKE ?
+                        OR (
+                            ? <> ''
+                            AND REPLACE(REPLACE(REPLACE(REPLACE(cl.cpf, '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?
                         )
+                        OR (
+                            ? <> ''
+                            AND REPLACE(REPLACE(REPLACE(REPLACE(cl.cnpj, '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?
+                        )
+                    )
 
                     ORDER BY
                         cl.name COLLATE NOCASE ASC,
@@ -257,20 +177,13 @@ async function clients(fastify: FastifyInstance) {
                         c.id DESC,
                         ss.id ASC
                 `)
-                .all(
-                    ...dateParams,
-                    ...searchParams
-                ) as any[];
+                .all(...dateParams, ...searchParams) as any[];
 
-            // ----------------------------------------------------
-            // AGRUPAR CLIENTES -> VENDAS -> ITENS
-            // ----------------------------------------------------
-
+            // Agrupa clientes -> vendas -> itens.
             const clientsMap = new Map<number, any>();
 
             for (const row of rows) {
                 const clientId = Number(row.client_id);
-
                 let client = clientsMap.get(clientId);
 
                 if (!client) {
@@ -279,6 +192,13 @@ async function clients(fastify: FastifyInstance) {
                         name: row.client_name,
                         cpf: row.cpf,
                         cnpj: row.cnpj,
+                        address: row.client_address ?? null,
+                        number: row.client_number ?? null,
+                        complement: row.client_complement ?? null,
+                        neighborhood: row.client_neighborhood ?? null,
+                        city: row.client_city ?? null,
+                        state: row.client_state ?? null,
+                        zip_code: row.client_zip_code ?? null,
                         purchase_count: 0,
                         items_bought_count: 0,
                         total_spent: 0,
@@ -294,7 +214,6 @@ async function clients(fastify: FastifyInstance) {
                 }
 
                 const saleId = Number(row.sale_id);
-
                 let purchase = client._sales.get(saleId);
 
                 if (!purchase) {
@@ -322,51 +241,35 @@ async function clients(fastify: FastifyInstance) {
                 purchase.items.push({
                     id: Number(row.sale_item_id),
                     type: row.item_type,
-
                     item_id: row.product_id != null
                         ? Number(row.product_id)
                         : row.service_id != null
                             ? Number(row.service_id)
                             : null,
-
                     product_id: row.product_id != null
                         ? Number(row.product_id)
                         : null,
-
                     service_id: row.service_id != null
                         ? Number(row.service_id)
                         : null,
-
                     sm_code: row.item_sm_code ?? null,
                     bar_code: row.item_bar_code ?? null,
                     name: row.item_name ?? "Item não identificado",
-
                     quantity,
                     unit_measure: row.unit_measure ?? "UN",
-
                     unit_value: Number(unitValue.toFixed(2)),
-
-                    total_value: Number(
-                        (unitValue * quantity).toFixed(2)
-                    )
+                    total_value: Number((unitValue * quantity).toFixed(2))
                 });
 
                 client.items_bought_count += quantity;
             }
 
-            const data = Array.from(
-                clientsMap.values()
-            ).map((client) => {
-                const {
-                    _sales,
-                    ...clientData
-                } = client;
+            const data = Array.from(clientsMap.values()).map((client) => {
+                const { _sales, ...clientData } = client;
 
                 return {
                     ...clientData,
-                    total_spent: Number(
-                        client.total_spent.toFixed(2)
-                    ),
+                    total_spent: Number(client.total_spent.toFixed(2)),
                     purchases: client.purchases
                 };
             });
@@ -381,16 +284,11 @@ async function clients(fastify: FastifyInstance) {
     // ============================================================
     // GET CLIENT BY ID
     // GET /clients/:clientId
-    //
-    // Retorna os dados cadastrais para a página de edição.
-    // method_id é deliberadamente omitido.
+    // Retorna dados cadastrais para edição. Omitidos apenas IE e IBGE.
     // ============================================================
-
     fastify.get(
         "/clients/:clientId",
-        {
-            onRequest: [fastify.authenticate]
-        },
+        { onRequest: [fastify.authenticate] },
         async (request, reply) => {
             const { clientId: clientIdParam } = request.params as {
                 clientId: string;
@@ -398,10 +296,7 @@ async function clients(fastify: FastifyInstance) {
 
             const clientId = Number(clientIdParam);
 
-            if (
-                !Number.isSafeInteger(clientId) ||
-                clientId <= 0
-            ) {
+            if (!Number.isSafeInteger(clientId) || clientId <= 0) {
                 return reply.code(400).send({
                     message: "O identificador do cliente é inválido."
                 });
@@ -414,13 +309,11 @@ async function clients(fastify: FastifyInstance) {
                         name,
                         cpf,
                         cnpj,
-                        ie,
                         address,
                         number,
                         complement,
                         neighborhood,
                         city,
-                        city_ibge,
                         state,
                         zip_code
                     FROM clients
@@ -442,19 +335,14 @@ async function clients(fastify: FastifyInstance) {
         }
     );
 
-    
     // ============================================================
     // GET CLIENTS
     // GET /clients?search=
-    //
     // Listagem resumida para a tela de clientes.
     // ============================================================
-
     fastify.get(
         "/clients",
-        {
-            onRequest: [fastify.authenticate]
-        },
+        { onRequest: [fastify.authenticate] },
         async (request) => {
             const query = String(
                 (request.query as { search?: string })?.search ?? ""
@@ -470,48 +358,28 @@ async function clients(fastify: FastifyInstance) {
                         id,
                         name,
                         cpf,
-                        cnpj
+                        cnpj,
+                        address,
+                        number,
+                        complement,
+                        neighborhood,
+                        city,
+                        state,
+                        zip_code
                     FROM clients
                     WHERE
                         ? = ''
                         OR name LIKE ?
                         OR cpf LIKE ?
                         OR cnpj LIKE ?
-
                         OR (
                             ? <> ''
-                            AND REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        REPLACE(cpf, '.', ''),
-                                        '-',
-                                        ''
-                                    ),
-                                    '/',
-                                    ''
-                                ),
-                                ' ',
-                                ''
-                            ) LIKE ?
+                            AND REPLACE(REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?
                         )
-
                         OR (
                             ? <> ''
-                            AND REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        REPLACE(cnpj, '.', ''),
-                                        '-',
-                                        ''
-                                    ),
-                                    '/',
-                                    ''
-                                ),
-                                ' ',
-                                ''
-                            ) LIKE ?
+                            AND REPLACE(REPLACE(REPLACE(REPLACE(cnpj, '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?
                         )
-
                     ORDER BY name COLLATE NOCASE
                     LIMIT 200
                 `)

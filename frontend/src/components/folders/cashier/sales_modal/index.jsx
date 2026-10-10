@@ -346,29 +346,6 @@ export default function CashierSalesModal({ onClose }) {
                                                 : "Cupom Fiscal"}
                                         </button>
 
-                                        <button
-                                            className="cashier-sales-modal__action cashier-sales-modal__action--xml"
-                                            type="button"
-                                            disabled={
-                                                !danfeAvailable ||
-                                                Boolean(busyAction)
-                                            }
-                                            onClick={() =>
-                                                handleDocumentAction(
-                                                    sale,
-                                                    "danfe"
-                                                )
-                                            }
-                                            title={
-                                                danfeAvailable
-                                                    ? "Abrir a DANFE da NF-e autorizada."
-                                                    : "Disponível somente quando a NF-e estiver autorizada e a DANFE disponível."
-                                            }
-                                        >
-                                            {busyAction === `${sale.id}-danfe`
-                                                ? "Carregando..."
-                                                : "DANFE"}
-                                        </button>
 
                                         <button
                                             className="cashier-sales-modal__action cashier-sales-modal__action--delete"

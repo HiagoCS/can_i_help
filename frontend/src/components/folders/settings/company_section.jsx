@@ -2,21 +2,16 @@ import { useEffect, useState } from "react";
 
 import { saveCompany } from "@/data/api/settings";
 import { SettingsActions, SettingsFeedback, SettingsField, SettingsSectionHeading } from "./common";
-import { regimeOptions } from "./constants";
 
 const blankCompany = {
     cnpj: "",
     legal_name: "",
     trade_name: "",
-    state_registration: "",
-    municipal_registration: "",
-    tax_regime: "SIMPLES_NACIONAL",
     address: "",
     number: "",
     complement: "",
     neighborhood: "",
     city: "",
-    city_ibge: "",
     state: "",
     zip_code: "",
     boss_user_id: ""
@@ -86,17 +81,6 @@ export default function CompanySection({ companyData, users = [], onSaved }) {
                 <SettingsField label="Nome fantasia">
                     <input maxLength={180} value={form.trade_name ?? ""} onChange={(event) => change("trade_name", event.target.value)} />
                 </SettingsField>
-                <SettingsField label="Inscrição estadual" required>
-                    <input required value={form.state_registration} onChange={(event) => change("state_registration", event.target.value)} />
-                </SettingsField>
-                <SettingsField label="Inscrição municipal">
-                    <input value={form.municipal_registration ?? ""} onChange={(event) => change("municipal_registration", event.target.value)} />
-                </SettingsField>
-                <SettingsField label="Regime tributário" required>
-                    <select required value={form.tax_regime} onChange={(event) => change("tax_regime", event.target.value)}>
-                        {regimeOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                    </select>
-                </SettingsField>
                 <SettingsField label="Endereço" required>
                     <input required value={form.address} onChange={(event) => change("address", event.target.value)} />
                 </SettingsField>
@@ -111,9 +95,6 @@ export default function CompanySection({ companyData, users = [], onSaved }) {
                 </SettingsField>
                 <SettingsField label="Cidade" required>
                     <input required value={form.city} onChange={(event) => change("city", event.target.value)} />
-                </SettingsField>
-                <SettingsField label="Código IBGE da cidade" required>
-                    <input inputMode="numeric" required maxLength={7} value={form.city_ibge} onChange={(event) => change("city_ibge", event.target.value.replace(/\D/g, "").slice(0, 7))} />
                 </SettingsField>
                 <SettingsField label="Estado (UF)" required>
                     <input required minLength={2} maxLength={2} value={form.state} onChange={(event) => change("state", event.target.value.toUpperCase())} />

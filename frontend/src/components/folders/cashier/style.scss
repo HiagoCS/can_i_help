@@ -670,6 +670,9 @@
         grid-column: 1 / -1;
         min-width: 0;
     }
+    .cashier-search--smCode,.cashier-search--barCode{
+        display: none;
+    }
 
     .cashier-toolbar__print {
         grid-column: 1 / -1;

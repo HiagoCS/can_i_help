@@ -1,17 +1,16 @@
 import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
+
 type ClientEditableFields = {
     name: string;
     cpf: string | null;
     cnpj: string | null;
-    ie: string | null;
     address: string | null;
     number: string | null;
     complement: string | null;
     neighborhood: string | null;
     city: string | null;
-    city_ibge: string | null;
     state: string | null;
     zip_code: string | null;
 };
@@ -61,30 +60,19 @@ function normalizeClientPayload(
         throw new Error("O CNPJ deve conter 14 dígitos.");
     }
 
-    const ie = normalizeOptionalText(body.ie);
     const address = normalizeOptionalText(body.address);
     const number = normalizeOptionalText(body.number);
     const complement = normalizeOptionalText(body.complement);
     const neighborhood = normalizeOptionalText(body.neighborhood);
     const city = normalizeOptionalText(body.city);
 
-    const rawCityIbge = normalizeOptionalText(body.city_ibge);
-    const cityIbge = rawCityIbge
-        ? normalizeDigits(rawCityIbge)
-        : null;
-
     const rawState = normalizeOptionalText(body.state);
-    const state = rawState
-        ? rawState.toUpperCase()
-        : null;
+    const state = rawState ? rawState.toUpperCase() : null;
 
     const rawZipCode = normalizeOptionalText(body.zip_code);
-    const zipCode = rawZipCode
-        ? normalizeDigits(rawZipCode)
-        : null;
+    const zipCode = rawZipCode ? normalizeDigits(rawZipCode) : null;
 
     const fields: Array<[string, string | null, number]> = [
-        ["Inscrição Estadual", ie, 30],
         ["Endereço", address, 180],
         ["Número", number, 20],
         ["Complemento", complement, 100],
@@ -101,12 +89,6 @@ function normalizeClientPayload(
         }
     }
 
-    if (cityIbge && !/^\d{7}$/.test(cityIbge)) {
-        throw new Error(
-            "O código IBGE do município deve conter 7 dígitos."
-        );
-    }
-
     if (state && !/^[A-Z]{2}$/.test(state)) {
         throw new Error(
             "Informe uma sigla de estado válida com 2 letras."
@@ -121,24 +103,23 @@ function normalizeClientPayload(
         name,
         cpf,
         cnpj,
-        ie,
         address,
         number,
         complement,
         neighborhood,
         city,
-        city_ibge: cityIbge,
         state,
         zip_code: zipCode
     };
 }
-async function clients(fastify: FastifyInstance) {
 
+async function clients(fastify: FastifyInstance) {
     // ============================================================
     // UPDATE CLIENT
     // PUT /clients/:clientId
     //
-    // Atualiza todos os campos editáveis.
+    // Atualiza os campos editáveis. IE e código IBGE não fazem
+    // parte do cadastro utilizado pelo controle interno.
     // method_id não é alterado.
     // ============================================================
 
@@ -278,8 +259,8 @@ async function clients(fastify: FastifyInstance) {
             // ----------------------------------------------------
             // ATUALIZAR CAMPOS EDITÁVEIS
             // ----------------------------------------------------
-            //
-            // method_id fica fora do UPDATE intencionalmente.
+            // IE e city_ibge são deliberadamente omitidos.
+            // method_id também fica fora do UPDATE.
 
             try {
                 sqlite
@@ -289,13 +270,11 @@ async function clients(fastify: FastifyInstance) {
                             name = ?,
                             cpf = ?,
                             cnpj = ?,
-                            ie = ?,
                             address = ?,
                             number = ?,
                             complement = ?,
                             neighborhood = ?,
                             city = ?,
-                            city_ibge = ?,
                             state = ?,
                             zip_code = ?
                         WHERE id = ?
@@ -304,13 +283,11 @@ async function clients(fastify: FastifyInstance) {
                         payload.name,
                         payload.cpf,
                         payload.cnpj,
-                        payload.ie,
                         payload.address,
                         payload.number,
                         payload.complement,
                         payload.neighborhood,
                         payload.city,
-                        payload.city_ibge,
                         payload.state,
                         payload.zip_code,
                         clientId
@@ -335,13 +312,11 @@ async function clients(fastify: FastifyInstance) {
                         name,
                         cpf,
                         cnpj,
-                        ie,
                         address,
                         number,
                         complement,
                         neighborhood,
                         city,
-                        city_ibge,
                         state,
                         zip_code
                     FROM clients
@@ -356,7 +331,6 @@ async function clients(fastify: FastifyInstance) {
             };
         }
     );
-
 }
 
 module.exports = clients;

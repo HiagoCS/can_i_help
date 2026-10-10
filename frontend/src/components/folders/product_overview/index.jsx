@@ -11,7 +11,6 @@ import {
     getProducts,
     updateProduct
 } from "@/data/api/products";
-import { getCriticalSettings } from "@/data/api/settings";
 import ColumnFilter from "@/components/column_filter";
 
 const blank = {
@@ -22,10 +21,6 @@ const blank = {
     value: "0",
     cost: "0",
     amount: "0",
-    ncm: "",
-    cst: "0",
-    csosn: "0",
-    icms: "0"
 };
 
 const toForm = (product) =>
@@ -37,11 +32,7 @@ const toForm = (product) =>
             description: product.description ?? "",
             value: String(product.value ?? "0"),
             cost: String(product.cost ?? "0"),
-            amount: String(product.amount ?? "0"),
-            ncm: product.ncm ?? "",
-            cst: String(product.cst ?? "0"),
-            csosn: String(product.csosn ?? "0"),
-            icms: String(product.icms ?? "0")
+            amount: String(product.amount ?? "0")
         }
         : { ...blank };
 
@@ -82,8 +73,6 @@ export default function ProductOverviewPage() {
     const isLevelThree = userLevel >= 3;
 
     const [products, setProducts] = useState([]);
-    const [taxRegime, setTaxRegime] = useState("SIMPLES_NACIONAL");
-    const [defaultNcm, setDefaultNcm] = useState("");
     const [selectedId, setSelectedId] = useState(null);
     const [form, setForm] = useState({ ...blank });
     const [mode, setMode] = useState("view");
@@ -148,47 +137,6 @@ export default function ProductOverviewPage() {
                 }
             });
 
-        /*
-         * Apenas usuários de nível 3 ou superior podem consultar
-         * as configurações críticas.
-         *
-         * Para níveis inferiores, não fazemos a requisição:
-         * taxRegime permanece com o padrão e defaultNcm fica vazio.
-         */
-        if (isLevelThree) {
-            getCriticalSettings()
-                .then((settings) => {
-                    if (controller.signal.aborted) return;
-
-                    setTaxRegime(
-                        settings?.fiscal?.tax_regime ??
-                        settings?.company?.tax_regime ??
-                        "SIMPLES_NACIONAL"
-                    );
-
-                    setDefaultNcm(
-                        settings?.fiscal?.ncm_default ?? ""
-                    );
-                })
-                .catch((reason) => {
-                    if (controller.signal.aborted) return;
-
-                    /*
-                     * O erro das configurações é apresentado sem
-                     * interromper o carregamento ou a visualização
-                     * dos produtos.
-                     */
-                    setError(
-                        reason instanceof Error
-                            ? reason.message
-                            : "Não foi possível carregar as configurações fiscais."
-                    );
-                });
-        } else {
-            setTaxRegime("SIMPLES_NACIONAL");
-            setDefaultNcm("");
-        }
-
         return () => controller.abort();
     }, [isLevelThree]);
 
@@ -236,7 +184,7 @@ export default function ProductOverviewPage() {
         .sort((a, b) => {
             if (a.status === 1 && b.status !== 1) return -1;
             if (a.status !== 1 && b.status === 1) return 1;
-            return a.id - b.id;
+            return b.id - a.id;
         })
         .slice(
             page * overviewPageSize,
@@ -371,13 +319,6 @@ export default function ProductOverviewPage() {
             description: form.description,
             value: form.value,
             cost: form.cost,
-            ncm: form.ncm.trim() || null,
-            cst: taxRegime === "REGIME_NORMAL" ? form.cst.trim() : "0",
-            csosn:
-                taxRegime === "REGIME_NORMAL"
-                    ? form.csosn.trim()
-                    : "0",
-            icms: taxRegime === "REGIME_NORMAL" ? Number(form.icms) : 0,
             ...(["new", "copy"].includes(mode)
                 ? { amount: form.amount }
                 : {})
@@ -792,75 +733,6 @@ export default function ProductOverviewPage() {
                                         </label>
                                     )}
                                 </div>
-
-                                <div className="product-overview__field-row">
-                                    <label className="product-overview__field">
-                                        <span>NCM do produto</span>
-                                        <input
-                                            inputMode="numeric"
-                                            maxLength={8}
-                                            placeholder={
-                                                defaultNcm
-                                                    ? "Padrão: " + defaultNcm
-                                                    : "NCM"
-                                            }
-                                            value={form.ncm}
-                                            onChange={(event) =>
-                                                field(
-                                                    "ncm",
-                                                    event.target.value
-                                                        .replace(/\D/g, "")
-                                                        .slice(0, 8)
-                                                )
-                                            }
-                                        />
-                                    </label>
-                                </div>
-
-                                {taxRegime === "REGIME_NORMAL" ? (
-                                    <div className="product-overview__field-row product-overview__field-row--tax">
-                                        <label className="product-overview__field">
-                                            <span>CST *</span>
-                                            <input
-                                                required
-                                                value={form.cst}
-                                                onChange={(event) =>
-                                                    field("cst", event.target.value)
-                                                }
-                                            />
-                                        </label>
-
-                                        <label className="product-overview__field">
-                                            <span>CSOSN *</span>
-                                            <input
-                                                required
-                                                value={form.csosn}
-                                                onChange={(event) =>
-                                                    field("csosn", event.target.value)
-                                                }
-                                            />
-                                        </label>
-
-                                        <label className="product-overview__field">
-                                            <span>ICMS (%) *</span>
-                                            <input
-                                                required
-                                                type="number"
-                                                min="0"
-                                                step=".01"
-                                                value={form.icms}
-                                                onChange={(event) =>
-                                                    field("icms", event.target.value)
-                                                }
-                                            />
-                                        </label>
-                                    </div>
-                                ) : (
-                                    <small className="product-overview__tax-note">
-                                        CST, CSOSN e ICMS serão salvos como
-                                        0 para o regime atual.
-                                    </small>
-                                )}
                             </>
                         ) : selected ? (
                             <>
@@ -886,20 +758,6 @@ export default function ProductOverviewPage() {
                                         Valor <b>{money(selected.value)}</b>
                                     </span>
                                 </div>
-
-                                <small className="product-overview__tax-note">
-                                    NCM:{" "}
-                                    {selected.ncm || defaultNcm || "—"}
-                                    {taxRegime === "REGIME_NORMAL"
-                                        ? " · CST " +
-                                            selected.cst +
-                                            " · CSOSN " +
-                                            selected.csosn +
-                                            " · ICMS " +
-                                            selected.icms +
-                                            "%"
-                                        : ""}
-                                </small>
 
                                 <span
                                     className={

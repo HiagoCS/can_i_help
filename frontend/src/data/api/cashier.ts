@@ -560,16 +560,6 @@ export interface CashierSale {
     total_value: string | number;
     dt_sale: string;
     client_name: string | null;
-    client_tax_id?: string | null;
-    fiscal_invoice_status?:
-        | "pending"
-        | "signed"
-        | "processing"
-        | "authorized"
-        | "rejected"
-        | "cancelled"
-        | null;
-    danfe_available: boolean;
 }
 
 export function getCashierSales(): Promise<CashierSale[]> {
@@ -585,7 +575,6 @@ export interface CashierSaleItemInput {
 
 export interface CashierSaleRequest {
     clientName?: string | null;
-    clientTaxId?: string | null;
     clientId?: number | null;
     paymentMethodId: number;
     installmentId?: number | null;
@@ -599,10 +588,6 @@ export interface CashierSaleSnapshotItem {
     name: string;
     description: string;
     unitMeasure: string;
-    ncm: string | null;
-    cst: string | null;
-    csosn: string | null;
-    icms: number;
     quantity: number;
     unitPrice: number;
     originalUnitPrice: number;
@@ -617,18 +602,6 @@ export type CashierNFeStatus =
     | "cancelled"
     | "error";
 
-export interface CashierNFeTransmissionResult {
-    sale_id: number;
-    status: CashierNFeStatus;
-    message: string;
-    access_key: string | null;
-    protocol: string | null;
-    sefaz_status_code: string | null;
-    sefaz_reason: string | null;
-    authorized_at: string | null;
-    response_saved: boolean;
-    danfe_available: boolean;
-}
 
 export interface CashierCompletedSale {
     id: number;
@@ -839,16 +812,6 @@ export function getCashierFiscalCoupon(
     );
 }
 
-export function transmitCashierSaleToSefaz(
-    saleId: number
-): Promise<CashierNFeTransmissionResult> {
-    const base = getSaleEndpoint(saleId);
-
-    return postData<CashierNFeTransmissionResult>(
-        `${base}/nfe/authorize`,
-        {}
-    );
-}
 
 export function getCashierDanfePdf(
     saleId: number,

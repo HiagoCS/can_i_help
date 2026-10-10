@@ -80,14 +80,23 @@
 
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 0.9rem;
 
         padding: 0.5rem 1rem;
 
-        border-bottom: 2px solid #000000;
-
-        background: #72add3;
+        background: transparent;
+        position: absolute;
+        left: 0;
+        right: 0;
+        //bottom: 812px;
+        z-index: 1;
+        margin: auto;
         color: #102c3b;
+        @media (max-width: 600px) {
+            left: 90%;
+            
+        }
     }
 
     .system-layout__mobile-menu {
