@@ -1,61 +1,14 @@
 import type { FastifyInstance } from "fastify";
 
 const crypto = require("node:crypto");
-const fs = require("node:fs/promises");
-const path = require("node:path");
 const { Buffer } = require("node:buffer");
-const { sqlite } = require("../../db/index");
+const { sqlite } = require("../../../db/index");
 
-const activeConnections = new Map<number, Set<any>>();
 const maximumCertificateSize = 8 * 1024 * 1024;
-const maximumAvatarSize = 2 * 1024 * 1024;
 const taxRegimes = ["SIMPLES_NACIONAL", "REGIME_NORMAL"];
-const operationDefault = "Venda de Mercadoria";
 
 function cleanText(value: unknown, maximumLength = 180) {
     return typeof value === "string" ? value.trim().slice(0, maximumLength) : "";
-}
-
-function getUserLevel(userId: number) {
-    const rows = sqlite.prepare(
-        "SELECT r.level FROM roles_user ru INNER JOIN roles r ON r.id = ru.role_id WHERE ru.user_id = ?"
-    ).all(userId) as Array<{ level: number }>;
-
-    return rows.reduce((highest, role) => Math.max(highest, Number(role.level) || 0), 0);
-}
-
-function getActiveUsers() {
-    const users = sqlite.prepare(
-        "SELECT id, email FROM users WHERE status = 1 ORDER BY email COLLATE NOCASE"
-    ).all() as Array<{ id: number; email: string }>;
-
-    return users.map((user) => ({
-        id: user.id,
-        name: (user.email.split("@")[0] ?? "").replace(/[._-]+/g, " ").trim() || "Usuário",
-        online: (activeConnections.get(user.id)?.size ?? 0) > 0
-    }));
-}
-
-function sendPresence(socket: any, type = "presence") {
-    if (socket.readyState !== 1) return;
-    socket.send(JSON.stringify({ type, users: getActiveUsers() }));
-}
-
-function broadcastPresence(exceptSocket?: any) {
-    const message = JSON.stringify({ type: "presence", users: getActiveUsers() });
-
-    for (const sockets of activeConnections.values()) {
-        for (const socket of sockets) {
-            if (socket !== exceptSocket && socket.readyState === 1) socket.send(message);
-        }
-    }
-}
-
-function removeConnection(userId: number, socket: any) {
-    const sockets = activeConnections.get(userId);
-    if (!sockets || !sockets.delete(socket)) return;
-    if (sockets.size === 0) activeConnections.delete(userId);
-    broadcastPresence();
 }
 
 function certificateKey() {
@@ -152,51 +105,7 @@ function transaction(callback: () => void) {
 }
 
 async function settings(fastify: FastifyInstance) {
-    const authenticated = [fastify.authenticate];
     const critical = [fastify.authenticate, fastify.authorize(3)];
-
-    fastify.get("/settings/presence", {
-        websocket: true,
-        onRequest: authenticated
-    }, (socket: any, request: any) => {
-        const userId = Number(request.user?.id);
-        const currentUser = sqlite.prepare("SELECT status FROM users WHERE id = ?").get(userId) as { status: number } | undefined;
-
-        if (!currentUser || !currentUser.status) {
-            socket.close(1008, "Conta inativa");
-            return;
-        }
-
-        const sockets = activeConnections.get(userId) ?? new Set<any>();
-        const wasOffline = sockets.size === 0;
-        sockets.add(socket);
-        activeConnections.set(userId, sockets);
-
-        sendPresence(socket, "snapshot");
-        if (wasOffline) broadcastPresence(socket);
-
-        socket.on("close", () => removeConnection(userId, socket));
-        socket.on("error", () => removeConnection(userId, socket));
-    });
-
-    fastify.get("/settings/critical", { onRequest: critical }, async () => {
-        const company = getCurrentCompany();
-        const fiscal = company ? getCurrentFiscalConfig(Number(company.id)) : undefined;
-
-        return {
-            message: "Configurações críticas carregadas.",
-            data: {
-                company: company ?? null,
-                fiscal: fiscal ?? null,
-                certificate: company
-                    ? getCertificateMetadata(Number(company.id))
-                    : { exists: false, status: false, valid_from: null, valid_until: null, is_valid: false },
-                users: sqlite.prepare(
-                    "SELECT id, email, status FROM users ORDER BY email COLLATE NOCASE"
-                ).all()
-            }
-        };
-    });
 
     fastify.put("/settings/company", { onRequest: critical }, async (request: any, reply: any) => {
         const body = (request.body ?? {}) as Record<string, unknown>;
@@ -307,48 +216,235 @@ async function settings(fastify: FastifyInstance) {
         return { message: "Configuração fiscal salva.", data: getCurrentFiscalConfig(Number(company.id)) };
     });
 
-    fastify.put("/settings/certificate", { onRequest: critical }, async (request: any, reply: any) => {
-        const company = getCurrentCompany();
-        if (!company) return reply.code(409).send({ message: "Cadastre a empresa antes do certificado digital." });
+    fastify.put("/settings/certificate",
+        {
+            onRequest: critical,
+        },
+        async (request: any, reply: any) => {
+            const { mkdir, unlink, readFile, readdir } = require("node:fs/promises");
+            const { createWriteStream } = require("node:fs");
+            const path = require("node:path");
+            const { randomUUID } = require("node:crypto");
+            const { pipeline } = require("node:stream/promises");
 
-        const body = (request.body ?? {}) as Record<string, unknown>;
-        const certificateData = cleanText(body.certificate_data, maximumCertificateSize * 2);
-        const password = typeof body.password === "string" ? body.password : "";
-        const validFrom = cleanText(body.valid_from, 32);
-        const validUntil = cleanText(body.valid_until, 32);
+            let certificatePath: string | null = null;
 
-        if (!certificateData || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(certificateData)) {
-            return reply.code(400).send({ message: "Selecione um certificado PFX ou P12 válido." });
-        }
+            try {
+                const company = getCurrentCompany();
 
-        const certificateBytes = Buffer.from(certificateData, "base64");
-        if (!certificateBytes.length || certificateBytes.length > maximumCertificateSize) {
-            return reply.code(413).send({ message: "O certificado deve ter no máximo 8 MB." });
-        }
-        if (!password) return reply.code(400).send({ message: "Informe a senha do certificado." });
-        if (!validDateRange(validFrom, validUntil)) return reply.code(400).send({ message: "Informe um período de validade válido." });
+                if (!company) {
+                    return reply.code(409).send({
+                        message: "Cadastre a empresa antes do certificado digital.",
+                    });
+                }
 
-        try {
-            const certificateValue = encryptCertificateValue(certificateBytes.toString("base64"));
-            const passwordValue = encryptCertificateValue(password);
-            const current = sqlite.prepare(
-                "SELECT id FROM fiscal_certificates WHERE company_id = ? ORDER BY id DESC LIMIT 1"
-            ).get(company.id) as { id: number } | undefined;
+                const storageDirectory = path.resolve(
+                    process.cwd(),
+                    "storage",
+                    "certificate"
+                );
 
-            if (current) {
-                sqlite.prepare("UPDATE fiscal_certificates SET certificate = ?, password = ?, valid_from = ?, valid_until = ?, status = 1 WHERE id = ?")
-                    .run(certificateValue, passwordValue, validFrom, validUntil, current.id);
-            } else {
-                sqlite.prepare("INSERT INTO fiscal_certificates (company_id, certificate, password, valid_from, valid_until, status) VALUES (?, ?, ?, ?, ?, 1)")
-                    .run(company.id, certificateValue, passwordValue, validFrom, validUntil);
+                let password = "";
+                let validFrom = "";
+                let validUntil = "";
+                let certificateReceived = false;
+
+                const parts = request.parts({
+                    limits: {
+                        fileSize: maximumCertificateSize,
+                        files: 1,
+                        fields: 10,
+                    },
+                });
+
+                for await (const part of parts) {
+                    if (part.type === "file") {
+                        if (part.fieldname !== "certificate") {
+                            part.file.resume();
+                            continue;
+                        }
+
+                        const extension = path
+                            .extname(part.filename || "")
+                            .toLowerCase();
+
+                        if (![".pfx", ".p12"].includes(extension)) {
+                            part.file.resume();
+
+                            return reply.code(400).send({
+                                message: "Selecione um certificado PFX ou P12 válido.",
+                            });
+                        }
+
+                        await mkdir(storageDirectory, { recursive: true });
+
+                        certificatePath = path.join(
+                            storageDirectory,
+                            `${randomUUID()}${extension}`
+                        );
+
+                        await pipeline(
+                            part.file,
+                            createWriteStream(certificatePath, { flags: "wx" })
+                        );
+
+                        if (part.file.truncated) {
+                            await unlink(certificatePath).catch(() => { });
+                            certificatePath = null;
+
+                            return reply.code(413).send({
+                                message: "O certificado deve ter no máximo 8 MB.",
+                            });
+                        }
+
+                        certificateReceived = true;
+                    } else {
+                        const value =
+                            typeof part.value === "string" ? part.value : "";
+
+                        if (part.fieldname === "password") {
+                            password = value;
+                        } else if (part.fieldname === "valid_from") {
+                            validFrom = cleanText(value, 32);
+                        } else if (part.fieldname === "valid_until") {
+                            validUntil = cleanText(value, 32);
+                        }
+                    }
+                }
+
+                if (!certificateReceived || !certificatePath) {
+                    return reply.code(400).send({
+                        message: "Envie o arquivo no campo 'certificate'.",
+                    });
+                }
+
+                if (!password) {
+                    return reply.code(400).send({
+                        message: "Informe a senha do certificado.",
+                    });
+                }
+
+                if (!validDateRange(validFrom, validUntil)) {
+                    return reply.code(400).send({
+                        message: "Informe um período de validade válido.",
+                    });
+                }
+
+                const certificateBytes = await readFile(certificatePath);
+
+                if (
+                    !certificateBytes.length ||
+                    certificateBytes.length > maximumCertificateSize
+                ) {
+                    return reply.code(413).send({
+                        message: "O certificado deve ter no máximo 8 MB.",
+                    });
+                }
+
+                const certificateValue = encryptCertificateValue(
+                    certificateBytes.toString("base64")
+                );
+
+                const passwordValue = encryptCertificateValue(password);
+
+                const relativeCertificatePath = path
+                    .relative(process.cwd(), certificatePath)
+                    .split(path.sep)
+                    .join("/");
+
+                const current = sqlite
+                    .prepare(`
+                    SELECT id
+                    FROM fiscal_certificates
+                    WHERE company_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                `)
+                    .get(company.id) as { id: number } | undefined;
+
+                if (current) {
+                    sqlite.prepare(`
+                    UPDATE fiscal_certificates
+                    SET certificate = ?,
+                        password = ?,
+                        valid_from = ?,
+                        valid_until = ?,
+                        status = 1
+                    WHERE id = ?
+                `).run(
+                        certificateValue,
+                        passwordValue,
+                        validFrom,
+                        validUntil,
+                        current.id
+                    );
+                } else {
+                    sqlite.prepare(`
+                    INSERT INTO fiscal_certificates (
+                        company_id,
+                        certificate,
+                        password,
+                        valid_from,
+                        valid_until,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?, ?, 1)
+                `).run(
+                        company.id,
+                        certificateValue,
+                        passwordValue,
+                        validFrom,
+                        validUntil
+                    );
+                }
+
+                // Mantém somente o certificado recém-salvo na pasta.
+                const files = await readdir(storageDirectory);
+
+                for (const filename of files) {
+                    const filePath = path.join(storageDirectory, filename);
+
+                    if (
+                        filePath !== certificatePath &&
+                        [".pfx", ".p12"].includes(
+                            path.extname(filename).toLowerCase()
+                        )
+                    ) {
+                        await unlink(filePath);
+                    }
+                }
+
+                const metadata = getCertificateMetadata(Number(company.id));
+
+                return reply.send({
+                    message: "Certificado enviado e salvo. A senha permanece protegida.",
+                    data: {
+                        ...metadata,
+                        certificate_path: relativeCertificatePath,
+                    },
+                });
+            } catch (error: any) {
+                request.log.error(error);
+
+                if (certificatePath) {
+                    await unlink(certificatePath).catch(() => { });
+                }
+
+                if (
+                    error?.code === "FST_REQ_FILE_TOO_LARGE" ||
+                    error?.code === "FST_FILES_LIMIT"
+                ) {
+                    return reply.code(413).send({
+                        message: "O certificado deve ter no máximo 8 MB.",
+                    });
+                }
+
+                return reply.code(500).send({
+                    message: "Não foi possível enviar e salvar o certificado.",
+                });
             }
-        } catch (error) {
-            request.log.error(error);
-            return reply.code(500).send({ message: "Não foi possível proteger e salvar o certificado. Confira o segredo do servidor." });
         }
-
-        return { message: "Certificado salvo. A senha permanece protegida.", data: getCertificateMetadata(Number(company.id)) };
-    });
+    );
 
     fastify.put("/settings/certificate/status", { onRequest: critical }, async (request: any, reply: any) => {
         const company = getCurrentCompany();
@@ -365,52 +461,6 @@ async function settings(fastify: FastifyInstance) {
 
         sqlite.prepare("UPDATE fiscal_certificates SET status = ? WHERE id = ?").run(active ? 1 : 0, certificate.id);
         return { message: active ? "Certificado ativado." : "Certificado inativado.", data: getCertificateMetadata(Number(company.id)) };
-    });
-
-    fastify.delete("/settings/certificate", { onRequest: critical }, async (_request, reply) => {
-        const company = getCurrentCompany();
-        if (!company) return reply.code(404).send({ message: "Empresa não cadastrada." });
-
-        sqlite.prepare("UPDATE fiscal_certificates SET certificate = '', password = '', valid_from = NULL, valid_until = NULL, status = 0 WHERE company_id = ?")
-            .run(company.id);
-        return reply.code(204).send();
-    });
-
-    fastify.post("/settings/avatar", { onRequest: authenticated }, async (request: any, reply: any) => {
-        const body = (request.body ?? {}) as { data?: unknown; content_type?: unknown };
-        const data = cleanText(body.data, maximumAvatarSize * 2);
-        const contentType = cleanText(body.content_type, 40).toLowerCase();
-        const extensions: Record<string, string> = {
-            "image/png": "png",
-            "image/jpeg": "jpg",
-            "image/webp": "webp"
-        };
-        const extension = extensions[contentType];
-
-        if (!extension || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)) {
-            return reply.code(400).send({ message: "Envie uma imagem PNG, JPEG ou WebP." });
-        }
-
-        const image = Buffer.from(data, "base64");
-        if (!image.length || image.length > maximumAvatarSize) return reply.code(413).send({ message: "A imagem deve ter no máximo 2 MB." });
-
-        const fileName = crypto.randomUUID() + "." + extension;
-        const relativePath = path.join("avatars", fileName);
-        const storageDirectory = path.resolve(process.cwd(), "storage", "avatars");
-
-        try {
-            await fs.mkdir(storageDirectory, { recursive: true });
-            await fs.writeFile(path.join(storageDirectory, fileName), image, { flag: "wx" });
-            sqlite.prepare("UPDATE users SET avatar = ? WHERE id = ?").run(relativePath.replace(/\\/g, "/"), request.user.id);
-        } catch (error) {
-            request.log.error(error);
-            return reply.code(500).send({ message: "Não foi possível salvar a imagem do perfil." });
-        }
-
-        return {
-            message: "Imagem do perfil atualizada.",
-            data: { avatar: relativePath.replace(/\\/g, "/") }
-        };
     });
 }
 

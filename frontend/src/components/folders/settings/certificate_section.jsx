@@ -69,7 +69,7 @@ export default function CertificateSection({ certificateData, onSaved }) {
 
         try {
             const saved = await saveCertificate({
-                certificate_data: await readFile(file),
+                certificate: file,
                 password,
                 valid_from: validFrom,
                 valid_until: validUntil

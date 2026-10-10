@@ -38,7 +38,8 @@ src/db/migrations/**
 !src/db/migrations/20261008054733_dapper_silver_centurion/**
 
 # Storage generated/uploaded files
-./storage/
+./storage/**
+./storage/certificate/**
 # OS
 .DS_Store
 Thumbs.db

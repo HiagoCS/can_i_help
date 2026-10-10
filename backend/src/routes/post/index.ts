@@ -7,6 +7,7 @@ const paymentMethods = require("./payment_methods/index");
 const installments = require("./installments/index");
 const cashier = require("./cashier/index");
 const clients = require("./clients/index");
+const settings = require("./settings/index");
 async function post(fastify: FastifyInstance) {
     await users(fastify);
     await roles(fastify);
@@ -16,6 +17,7 @@ async function post(fastify: FastifyInstance) {
     await installments(fastify);
     await cashier(fastify);
     await clients(fastify);
+    await settings(fastify);
     fastify.post("/", async () => {
         return {
             message: "EightCS API funcionando! POST"

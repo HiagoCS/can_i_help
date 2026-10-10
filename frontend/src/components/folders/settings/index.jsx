@@ -24,13 +24,6 @@ export default function SettingsPage() {
     const canManageUsers = userLevel >= 2;
     const isLevelThree = userLevel >= 3;
 
-    console.log("[SettingsPage] Permissões:", {
-        userId: user?.id,
-        roles: user?.roles,
-        userLevel,
-        isLevelThree,
-    });
-
     const [activeSection, setActiveSection] = useState("profile");
     const [critical, setCritical] = useState(null);
     const [isLoading, setIsLoading] = useState(false);

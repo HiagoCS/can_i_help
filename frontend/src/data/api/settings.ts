@@ -134,18 +134,22 @@ export function saveFiscalSettings(data: Record<string, unknown>) {
 }
 
 export function saveCertificate(data: {
-    certificate_data: string;
+    certificate: File;
     password: string;
     valid_from: string;
     valid_until: string;
 }) {
-    return request<{
-        exists: boolean;
-        status: boolean;
-        valid_from: string | null;
-        valid_until: string | null;
-        is_valid: boolean;
-    }>("/api/settings/certificate", jsonBody(data));
+    const formData = new FormData();
+
+    formData.append("certificate", data.certificate);
+    formData.append("password", data.password);
+    formData.append("valid_from", data.valid_from);
+    formData.append("valid_until", data.valid_until);
+
+    return request("/api/settings/certificate",  {
+        method: "PUT",
+        body: formData,
+    });
 }
 
 export function setCertificateActive(active: boolean) {

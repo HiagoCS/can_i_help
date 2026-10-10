@@ -1170,6 +1170,165 @@ async function cashier(fastify: FastifyInstance) {
             }
         }
     );
+
+    fastify.post(
+    "/cashier/certificate",
+    {
+        onRequest: [fastify.authenticate],
+    },
+    async (request, reply) => {
+        const { sqlite } = require("../../../db/index");
+        const { mkdir, unlink } = require("node:fs/promises");
+        const { createWriteStream } = require("node:fs");
+        const path = require("node:path");
+        const { randomUUID } = require("node:crypto");
+        const { pipeline } = require("node:stream/promises");
+
+        let certificatePath: string | null = null;
+
+        try {
+            const data = await request.file({
+                limits: {
+                    fileSize: 10 * 1024 * 1024,
+                    files: 1,
+                },
+            });
+
+            if (!data || data.fieldname !== "certificate") {
+                return reply.code(400).send({
+                    error: "Envie o certificado no campo 'certificate'.",
+                });
+            }
+
+            const extension = path.extname(data.filename).toLowerCase();
+
+            if (![".pfx", ".p12"].includes(extension)) {
+                return reply.code(400).send({
+                    error: "Formato inválido. Envie um certificado .pfx ou .p12.",
+                });
+            }
+
+            const fields = data.fields as Record<string, any>;
+            const password = fields.password?.value;
+            const companyId = Number(fields.companyId?.value);
+
+            if (!password || typeof password !== "string") {
+                return reply.code(400).send({
+                    error: "A senha do certificado é obrigatória.",
+                });
+            }
+
+            if (!Number.isInteger(companyId) || companyId <= 0) {
+                return reply.code(400).send({
+                    error: "Informe um companyId válido.",
+                });
+            }
+
+            const company = sqlite
+                .prepare("SELECT id FROM company WHERE id = ?")
+                .get(companyId) as { id: number } | undefined;
+
+            if (!company) {
+                return reply.code(404).send({
+                    error: "Empresa não encontrada.",
+                });
+            }
+
+            const storageDirectory = path.resolve(
+                process.cwd(),
+                "storage",
+                "certificate"
+            );
+
+            await mkdir(storageDirectory, { recursive: true });
+
+            const filename = `${randomUUID()}${extension}`;
+
+            certificatePath = path.join(storageDirectory, filename);
+
+            await pipeline(
+                data.file,
+                createWriteStream(certificatePath, { flags: "wx" })
+            );
+
+            if (data.file.truncated) {
+                await unlink(certificatePath).catch(() => {});
+                return reply.code(413).send({
+                    error: "O certificado excede o limite de 10 MB.",
+                });
+            }
+
+            /*
+             * A implementação abaixo considera que fiscalCertificateTable
+             * possui os campos:
+             * companyId, certificate, password, validFrom, validUntil e status.
+             *
+             * Ajuste os nomes caso sua tabela use nomes diferentes.
+             */
+
+            const certificateBuffer = await import("node:fs/promises").then(
+                ({ readFile }) => readFile(certificatePath!)
+            );
+
+            /*
+             * Para preencher as datas reais de validade, é necessário
+             * analisar o conteúdo PKCS#12 e extrair o certificado X.509.
+             * Não é seguro inferir as datas a partir do nome do arquivo.
+             *
+             * Substitua estes valores pela análise real do certificado
+             * usando uma biblioteca compatível com PKCS#12.
+             */
+            const validFrom: string | null = null;
+            const validUntil: string | null = null;
+
+            const result = sqlite.prepare(`
+                INSERT INTO fiscalCertificateTable (
+                    companyId,
+                    certificate,
+                    password,
+                    validFrom,
+                    validUntil,
+                    status
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(
+                companyId,
+                `storage/certificate/${filename}`,
+                password,
+                validFrom,
+                validUntil,
+                "active"
+            );
+
+            return reply.code(201).send({
+                message: "Certificado enviado e salvo com sucesso.",
+                id: Number(result.lastInsertRowid),
+                companyId,
+                certificate: `storage/certificate/${filename}`,
+                validFrom,
+                validUntil,
+                status: "active",
+            });
+        } catch (error: any) {
+            if (certificatePath) {
+                const { unlink } = await import("node:fs/promises");
+                await unlink(certificatePath).catch(() => {});
+            }
+
+            request.log.error(error);
+
+            if (error?.code === "FST_REQ_FILE_TOO_LARGE") {
+                return reply.code(413).send({
+                    error: "O certificado excede o limite de 10 MB.",
+                });
+            }
+
+            return reply.code(500).send({
+                error: "Não foi possível salvar o certificado.",
+            });
+        }
+    }
+);
 }
 
 module.exports = cashier;

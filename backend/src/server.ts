@@ -1,6 +1,7 @@
 import "dotenv/config";
 import path = require("node:path");
 
+import multipart = require("@fastify/multipart");
 import Fastify = require("fastify");
 import cors = require("@fastify/cors");
 import fastifyStatic = require("@fastify/static");
@@ -13,7 +14,6 @@ const getRoute = require("./routes/get/index");
 const postRoute = require("./routes/post/index");
 const deleteRoute = require("./routes/delete/index");
 const putRoute = require("./routes/put/index");
-const settingsRoutes = require("./routes/settings/index");
 
 const port = Number(process.env.PORT || process.env.FASTIFY_API_PORT || 3000);
 
@@ -22,6 +22,7 @@ const server = Fastify({
     bodyLimit: 12 * 1024 * 1024
 });
 
+server.register(multipart);
 server.register(cookie);
 server.register(websocket);
 server.register(require("@fastify/jwt"), {
@@ -101,10 +102,6 @@ server.decorate(
         };
     }
 );
-
-server.register(settingsRoutes, {
-    prefix: "/api"
-});
 server.register(getRoute, {
     prefix: "/api"
 });
