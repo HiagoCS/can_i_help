@@ -26,7 +26,6 @@ async function products(fastify: FastifyInstance) {
                 value,
                 cost,
                 amount,
-                unit_measure,
                 ncm,
                 cst,
                 csosn,
@@ -40,7 +39,6 @@ async function products(fastify: FastifyInstance) {
                 value?: number | string | null;
                 cost?: number | string | null;
                 amount?: number | string | null;
-                unit_measure?: string | null;
                 ncm?: string | null;
                 cst?: string | number | null;
                 csosn?: string | number | null;
@@ -62,8 +60,6 @@ async function products(fastify: FastifyInstance) {
                     message: "Product not found"
                 });
             }
-            const convertedUnitMeasure=unit_measure===undefined?String(product.unit_measure??"UN"):String(unit_measure??"").trim().toUpperCase();
-            if(!convertedUnitMeasure||convertedUnitMeasure.length>10)return reply.code(400).send({message:"Informe uma unidade de medida válida (até 10 caracteres)."});
 
 
 
@@ -306,7 +302,6 @@ async function products(fastify: FastifyInstance) {
                         value = COALESCE(?, value),
                         cost = COALESCE(?, cost),
                         amount = COALESCE(?, amount),
-                        unit_measure = COALESCE(?, unit_measure),
                         ncm = ?,
                         cst = ?,
                         csosn = ?,
@@ -336,7 +331,6 @@ async function products(fastify: FastifyInstance) {
                     convertedCost,
 
                     convertedAmount,
-                    unit_measure !== undefined ? convertedUnitMeasure : null,
                     finalNcm,
 
                     finalCst,
@@ -353,7 +347,7 @@ async function products(fastify: FastifyInstance) {
                 );
 
 
-            if(status!==undefined||sm_code!==undefined||bar_code!==undefined||name!==undefined||description!==undefined||value!==undefined||cost!==undefined||unit_measure!==undefined||ncm!==undefined||cst!==undefined||csosn!==undefined||icms!==undefined){const snapshot=sqlite.prepare("SELECT * FROM products WHERE id = ?").get(id);recordProductMovement(snapshot,status===0?"deactivate":"edit",0,0);}
+            if(status!==undefined||sm_code!==undefined||bar_code!==undefined||name!==undefined||description!==undefined||value!==undefined||cost!==undefined||ncm!==undefined||cst!==undefined||csosn!==undefined||icms!==undefined){const snapshot=sqlite.prepare("SELECT * FROM products WHERE id = ?").get(id);recordProductMovement(snapshot,status===0?"deactivate":"edit",0,0);}
             sqlite.exec("COMMIT");
             } catch (error) {
                 sqlite.exec("ROLLBACK");
@@ -373,7 +367,6 @@ async function products(fastify: FastifyInstance) {
                         value,
                         cost,
                         amount,
-                        unit_measure,
                         status
                     FROM products
                     WHERE id = ?

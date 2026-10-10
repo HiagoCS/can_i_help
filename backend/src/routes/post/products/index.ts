@@ -173,7 +173,6 @@ async function products(fastify: FastifyInstance) {
                 value,
                 cost,
                 amount,
-                unit_measure,
                 ncm,
                 cst,
                 csosn,
@@ -187,7 +186,6 @@ async function products(fastify: FastifyInstance) {
                 value?: number | string | null;
                 cost?: number | string | null;
                 amount?: number | string | null;
-                unit_measure?: string | null;
                 ncm?: string | null;
                 cst?: string | number | null;
                 csosn?: string | number | null;
@@ -195,9 +193,6 @@ async function products(fastify: FastifyInstance) {
                 status?: number | null;
             };
 
-
-            const finalUnitMeasure=String(unit_measure??"UN").trim().toUpperCase();
-            if(!finalUnitMeasure||finalUnitMeasure.length>10)return reply.code(400).send({message:"Informe uma unidade de medida válida (até 10 caracteres)."});
             // REQUIRED FIELD
             if (!name || !name.trim()) {
 
@@ -425,14 +420,13 @@ async function products(fastify: FastifyInstance) {
                         value,
                         cost,
                         amount,
-                        unit_measure,
                         ncm,
                         cst,
                         csosn,
                         icms,
                         status
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `)
                 .run(
                     finalSmCode,
@@ -442,7 +436,6 @@ async function products(fastify: FastifyInstance) {
                     finalValue,
                     finalCost,
                     finalAmount,
-                    finalUnitMeasure,
                     finalNcm,
                     finalCst,
                     finalCsosn,

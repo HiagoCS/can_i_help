@@ -276,7 +276,7 @@ const updateStockTable = sqliteTable("update_stock", {
     dtUpdate: text("dt_update").notNull(),
     referenceId: integer("reference_id"),
     movementValue: text("movement_value"),
-    unitMeasure: text("unit_measure").notNull().default("UN"),
+    unitMeasure: text("unit_measure").default("UN"),
     notes: text("notes"),
     smCode: text("sm_code").notNull(),
     barCode: text("bar_code").notNull(),
