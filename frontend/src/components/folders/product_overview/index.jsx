@@ -406,7 +406,7 @@ export default function ProductOverviewPage() {
                 const updated = await updateProduct(selected.id, {
                     status
                 });
-
+                console.log("Updated product status:", status);
                 setProducts((current) =>
                     current.map((item) =>
                         item.id === updated.id ? updated : item
