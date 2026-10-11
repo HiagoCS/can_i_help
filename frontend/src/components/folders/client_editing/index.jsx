@@ -175,7 +175,6 @@ export default function ClientEditingPage() {
                 }
 
                 setForm(normalizeClient(client));
-                console.log("Client data loaded:", client);
             } catch (error) {
                 if (isMounted && !controller.signal.aborted) {
                     setErrorMessage(getErrorMessage(error));

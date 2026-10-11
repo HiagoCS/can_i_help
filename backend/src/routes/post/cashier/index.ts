@@ -713,7 +713,6 @@ async function cashier(fastify: FastifyInstance) {
                         return saleItem;
                     }
                 );
-                console.log(responseItems);
                 return reply.code(201).send({
                     message: "Venda registrada com sucesso.",
                     data: {
