@@ -190,6 +190,61 @@ async function settings(fastify: FastifyInstance) {
         fastify.authorize(3)
     ];
 
+    /*
+     * Verifica se já existe um usuário administrativo.
+     *
+     * Esta rota é pública intencionalmente para permitir que o frontend
+     * verifique a necessidade de configuração inicial antes do login.
+     *
+     * Considera todos os usuários, inclusive inativos, e procura um
+     * vínculo com qualquer perfil de nível 3 ou superior cujo nome
+     * não seja "developer".
+     */
+    fastify.get(
+        "/settings/initial-setup",
+        async (_request, reply) => {
+            try {
+                const administrator = sqlite.prepare(`
+                    SELECT 1 AS found
+                    FROM users AS u
+                    INNER JOIN roles_user AS ur
+                        ON ur.user_id = u.id
+                    INNER JOIN roles AS r
+                        ON r.id = ur.role_id
+                    WHERE r.level >= 3
+                      AND LOWER(TRIM(r.name)) <> 'developer'
+                    LIMIT 1
+                `).get() as { found: number } | undefined;
+
+                const hasAdministrator = Boolean(administrator);
+                const requiresInitialSetup = !hasAdministrator;
+
+                return reply.send({
+                    message: requiresInitialSetup
+                        ? "Nenhum usuário administrativo foi encontrado. A configuração inicial é necessária."
+                        : "Já existe um usuário administrativo cadastrado.",
+                    data: {
+                        hasAdministrator,
+                        requiresInitialSetup,
+                        status: requiresInitialSetup
+                            ? "setup_required"
+                            : "configured"
+                    }
+                });
+            } catch (error) {
+                _request.log.error(
+                    error,
+                    "Não foi possível verificar a configuração inicial."
+                );
+
+                return reply.code(500).send({
+                    message:
+                        "Não foi possível verificar se o sistema já possui um usuário administrativo."
+                });
+            }
+        }
+    );
+
     fastify.get(
         "/settings/presence",
         {
@@ -237,15 +292,7 @@ async function settings(fastify: FastifyInstance) {
     /*
      * Download do backup do banco de dados SQLite.
      *
-     * A rota:
-     * 1. Exige autenticação e nível 3 ou superior.
-     * 2. Utiliza o caminho do banco realmente aberto pela aplicação.
-     * 3. Cria um snapshot consistente em um diretório temporário.
-     * 4. Envia o arquivo como download ao navegador.
-     * 5. Remove o snapshot temporário depois do envio.
-     *
-     * Não recebe caminhos do cliente e não disponibiliza a raiz
-     * do backend como diretório público.
+     * Mantém a rota protegida por autenticação e nível 3 ou superior.
      */
     fastify.get(
         "/settings/database/download",
@@ -267,10 +314,8 @@ async function settings(fastify: FastifyInstance) {
                     });
                 }
 
-                // Usa o caminho fornecido pelo módulo que abriu a conexão.
                 const sourcePath = resolve(databasePath);
 
-                // Confirma que o arquivo de origem existe e pode ser lido.
                 await access(sourcePath, fsConstants.R_OK);
 
                 const sourceStats = await stat(sourcePath);
@@ -282,7 +327,6 @@ async function settings(fastify: FastifyInstance) {
                     });
                 }
 
-                // Cria um diretório temporário exclusivo para esta requisição.
                 temporaryDirectory = await mkdtemp(
                     join(tmpdir(), "posso-ajudar-backup-")
                 );
@@ -299,10 +343,6 @@ async function settings(fastify: FastifyInstance) {
                     filename
                 );
 
-                /*
-                 * Faz backup pela API do SQLite para produzir um snapshot
-                 * consistente, sem simplesmente copiar o arquivo ativo.
-                 */
                 await backup(sqlite, snapshotPath);
 
                 const snapshotStats = await stat(snapshotPath);
@@ -333,9 +373,7 @@ async function settings(fastify: FastifyInstance) {
                         force: true
                     }).catch((error: unknown) => {
                         fastify.log.warn(
-                            {
-                                err: error
-                            },
+                            { err: error },
                             "Não foi possível remover o diretório temporário do backup."
                         );
                     });
@@ -345,9 +383,7 @@ async function settings(fastify: FastifyInstance) {
 
                 stream.once("error", (error: unknown) => {
                     fastify.log.error(
-                        {
-                            err: error
-                        },
+                        { err: error },
                         "Erro ao transmitir o backup SQLite."
                     );
 
@@ -382,18 +418,14 @@ async function settings(fastify: FastifyInstance) {
                         force: true
                     }).catch((cleanupError: unknown) => {
                         fastify.log.warn(
-                            {
-                                err: cleanupError
-                            },
+                            { err: cleanupError },
                             "Falha ao limpar o diretório temporário do backup."
                         );
                     });
                 }
 
                 fastify.log.error(
-                    {
-                        err: error
-                    },
+                    { err: error },
                     "Não foi possível gerar o backup SQLite."
                 );
 

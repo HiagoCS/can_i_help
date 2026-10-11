@@ -108,6 +108,32 @@ export type SystemConfigSaveItem =
     };
 
 /* -------------------------------------------------------------------------- */
+/* Configuração inicial do sistema                                            */
+/* -------------------------------------------------------------------------- */
+
+export interface InitialSetupStatus {
+    hasAdministrator: boolean;
+    requiresInitialSetup: boolean;
+    status: "setup_required" | "configured";
+}
+
+/**
+ * Consulta se o sistema já possui um usuário com perfil de nível 3 ou
+ * superior, excluindo o perfil developer.
+ *
+ * Esta rota é pública para permitir que a aplicação verifique a necessidade
+ * de configuração inicial antes do primeiro login.
+ */
+export function getInitialSetupStatus(): Promise<InitialSetupStatus> {
+    return request<InitialSetupStatus>(
+        "/api/settings/initial-setup",
+        {
+            method: "GET"
+        }
+    );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Configurações críticas gerais                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -237,7 +263,10 @@ async function getDatabaseOperationError(
         try {
             const result = JSON.parse(body) as ApiResponse<unknown>;
 
-            if (typeof result.message === "string" && result.message.trim()) {
+            if (
+                typeof result.message === "string" &&
+                result.message.trim()
+            ) {
                 return result.message;
             }
         } catch {
@@ -292,7 +321,6 @@ export async function downloadSystemDatabase(): Promise<void> {
     }
 
     const filename = getDatabaseDownloadFilename(response);
-
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
 

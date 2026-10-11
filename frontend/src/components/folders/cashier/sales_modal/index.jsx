@@ -1,4 +1,7 @@
-﻿import { useEffect, useState } from "react";
+﻿
+import { useEffect, useState } from "react";
+
+import { getCurrentUser } from "@/data/api/auth";
 
 import {
     getCashierSales,
@@ -45,6 +48,16 @@ function isDanfeAvailable(sale) {
     );
 }
 
+function hasDeletePermission(user) {
+    if (!Array.isArray(user?.roles)) {
+        return false;
+    }
+
+    return user.roles.some(
+        (role) => Number(role.level) >= 3
+    );
+}
+
 export default function CashierSalesModal({ onClose }) {
     const [sales, setSales] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +67,9 @@ export default function CashierSalesModal({ onClose }) {
     const [busyAction, setBusyAction] = useState("");
     const [pendingDeleteSale, setPendingDeleteSale] = useState(null);
     const [deleteError, setDeleteError] = useState("");
+
+    const [canDeleteSales, setCanDeleteSales] = useState(false);
+    const [isCheckingPermission, setIsCheckingPermission] = useState(true);
 
     /*
      * Carrega as vendas ao abrir o modal.
@@ -82,6 +98,46 @@ export default function CashierSalesModal({ onClose }) {
         return () => {
             isMounted = false;
             controller.abort();
+        };
+    }, []);
+
+    /*
+     * Verifica o nível de acesso do usuário autenticado.
+     *
+     * A exclusão só fica disponível quando o usuário possui
+     * pelo menos uma role com nível 3 ou superior.
+     *
+     * Em caso de falha na consulta, a permissão é negada.
+     */
+    useEffect(() => {
+        let isMounted = true;
+
+        async function checkDeletePermission() {
+            setIsCheckingPermission(true);
+
+            try {
+                const currentUser = await getCurrentUser();
+
+                if (isMounted) {
+                    setCanDeleteSales(
+                        hasDeletePermission(currentUser)
+                    );
+                }
+            } catch {
+                if (isMounted) {
+                    setCanDeleteSales(false);
+                }
+            } finally {
+                if (isMounted) {
+                    setIsCheckingPermission(false);
+                }
+            }
+        }
+
+        checkDeletePermission();
+
+        return () => {
+            isMounted = false;
         };
     }, []);
 
@@ -123,6 +179,13 @@ export default function CashierSalesModal({ onClose }) {
     }
 
     function openDeleteConfirmation(sale) {
+        if (isCheckingPermission || !canDeleteSales) {
+            setActionError(
+                "A exclusão de notas exige nível de acesso 3 ou superior."
+            );
+            return;
+        }
+
         setActionError("");
         setActionMessage("");
         setDeleteError("");
@@ -141,11 +204,18 @@ export default function CashierSalesModal({ onClose }) {
     /*
      * Executa a exclusão somente após a confirmação.
      *
-     * O backend é responsável por validar vínculos fiscais,
-     * restaurar o estoque e excluir os registros em transação.
+     * A permissão é conferida novamente antes de chamar a API.
+     * O backend também deve validar o nível do usuário.
      */
     async function handleDeleteSale() {
         if (!pendingDeleteSale || busyAction) {
+            return;
+        }
+
+        if (isCheckingPermission || !canDeleteSales) {
+            setDeleteError(
+                "Você não tem permissão para excluir notas. É necessário nível de acesso 3 ou superior."
+            );
             return;
         }
 
@@ -226,7 +296,11 @@ export default function CashierSalesModal({ onClose }) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="cashier-sales-title"
-                aria-busy={isLoading || Boolean(busyAction)}
+                aria-busy={
+                    isLoading ||
+                    Boolean(busyAction) ||
+                    isCheckingPermission
+                }
             >
                 <header className="cashier-sales-modal__header">
                     <h2 id="cashier-sales-title">Notas Fiscais</h2>
@@ -274,6 +348,16 @@ export default function CashierSalesModal({ onClose }) {
                             role="status"
                         >
                             {actionMessage}
+                        </p>
+                    )}
+
+                    {!isCheckingPermission && !canDeleteSales && (
+                        <p
+                            className="cashier-sales-modal__message"
+                            role="status"
+                        >
+                            A exclusão de notas está disponível apenas para
+                            usuários com nível de acesso 3 ou superior.
                         </p>
                     )}
 
@@ -346,15 +430,22 @@ export default function CashierSalesModal({ onClose }) {
                                                 : "Cupom Fiscal"}
                                         </button>
 
-
                                         <button
                                             className="cashier-sales-modal__action cashier-sales-modal__action--delete"
                                             type="button"
-                                            disabled={Boolean(busyAction)}
+                                            disabled={
+                                                Boolean(busyAction) ||
+                                                isCheckingPermission ||
+                                                !canDeleteSales
+                                            }
                                             onClick={() =>
                                                 openDeleteConfirmation(sale)
                                             }
-                                            title="Excluir esta venda."
+                                            title={
+                                                canDeleteSales
+                                                    ? "Excluir esta venda."
+                                                    : "A exclusão exige nível de acesso 3 ou superior."
+                                            }
                                         >
                                             Excluir
                                         </button>
@@ -483,7 +574,11 @@ export default function CashierSalesModal({ onClose }) {
                             <button
                                 className="cashier-sales-modal__action cashier-sales-modal__action--delete"
                                 type="button"
-                                disabled={Boolean(busyAction)}
+                                disabled={
+                                    Boolean(busyAction) ||
+                                    isCheckingPermission ||
+                                    !canDeleteSales
+                                }
                                 onClick={handleDeleteSale}
                             >
                                 {isDeleting

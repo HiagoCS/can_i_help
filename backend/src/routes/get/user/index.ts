@@ -1,18 +1,34 @@
+
 import type { FastifyInstance } from "fastify";
+
 const { sqlite } = require("../../../db/index");
 
 async function users(fastify: FastifyInstance) {
-
-    fastify.get("/users",
+    fastify.get(
+        "/users",
         {
-            onRequest: [fastify.authenticate, fastify.authorize(2)]
+            onRequest: [
+                fastify.authenticate,
+                fastify.authorize(2)
+            ]
         },
         async () => {
-
             const users = sqlite
                 .prepare(`
-                    SELECT id, email, avatar, status
-                    FROM users
+                    SELECT
+                        u.id,
+                        u.email,
+                        u.avatar,
+                        u.status
+                    FROM users u
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM roles_user ru
+                        INNER JOIN roles r
+                            ON r.id = ru.role_id
+                        WHERE ru.user_id = u.id
+                          AND LOWER(TRIM(r.name)) = 'developer'
+                    )
                 `)
                 .all();
 
@@ -28,14 +44,12 @@ async function users(fastify: FastifyInstance) {
             `);
 
             const data = users.map((user: any) => {
-
                 const roles = getRoles.all(user.id);
 
                 return {
                     ...user,
                     roles
                 };
-
             });
 
             return {
@@ -45,12 +59,12 @@ async function users(fastify: FastifyInstance) {
         }
     );
 
-    fastify.get("/me",
+    fastify.get(
+        "/me",
         {
             onRequest: [fastify.authenticate]
         },
         async (request) => {
-
             const { id } = request.user as {
                 id: number;
                 email: string;
@@ -87,7 +101,8 @@ async function users(fastify: FastifyInstance) {
         }
     );
 
-    fastify.get("/user/:id",
+    fastify.get(
+        "/user/:id",
         {
             onRequest: [
                 fastify.authenticate,
@@ -95,7 +110,6 @@ async function users(fastify: FastifyInstance) {
             ]
         },
         async (request, reply) => {
-
             const { id } = request.params as {
                 id: string;
             };
