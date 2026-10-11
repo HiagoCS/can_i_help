@@ -144,6 +144,10 @@ function PieChart({ totals, small = false }) {
         (sum, item) => sum + item.value,
         0
     );
+    const net =
+    (Number(totals.revenue) || 0) -
+    (Number(totals.entryCost) || 0) -
+    (Number(totals.lossCost) || 0);
 
     let startAngle = 0;
 
@@ -269,7 +273,7 @@ function PieChart({ totals, small = false }) {
                     </>
                 ) : (
                     <span className="product-reports__pie-total">
-                        {total ? money(total) : "Sem dados"}
+                        {total ? money(net) : "Sem dados"}
                     </span>
                 )}
             </div>

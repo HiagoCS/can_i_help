@@ -72,36 +72,28 @@ const companyTable = sqliteTable("company", {
         .references(() => userTable.id),
 
     cnpj: text("cnpj")
-        .notNull()
         .unique(),
 
-    legalName: text("legal_name")
-        .notNull(),
+    legalName: text("legal_name"),
 
     tradeName: text("trade_name"),
 
-    address: text("address")
-        .notNull(),
+    address: text("address"),
 
-    number: text("number")
-        .notNull(),
+    number: text("number"),
 
     complement: text("complement"),
 
-    neighborhood: text("neighborhood")
-        .notNull(),
+    neighborhood: text("neighborhood"),
 
-    city: text("city")
-        .notNull(),
+    city: text("city"),
 
-    cityIbge: text("city_ibge")
-        .notNull(),
+    cityIbge: text("city_ibge"),
 
-    state: text("state")
-        .notNull(),
+    state: text("state"),
+    pixKey: text("pix_key"),
 
     zipCode: text("zip_code")
-        .notNull()
 });
 
 // ============================================================

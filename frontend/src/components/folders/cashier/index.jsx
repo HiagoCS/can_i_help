@@ -6,7 +6,8 @@ import {
     getCashierPaymentMethods,
     createCashierSale,
     getCashierClients,
-    searchCashierItems
+    searchCashierItems,
+    createCashierPixCode
 } from "@/data/api/cashier";
 
 import CashierSalesModal from "./sales_modal";
@@ -19,6 +20,14 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL"
 });
+
+/**
+ * Tempo máximo da sessão de pagamento no caixa.
+ *
+ * Este contador não revoga o QR Code estático no banco.
+ * O valor é mantido no frontend e pode ser alterado conforme necessário.
+ */
+const PIX_QR_EXPIRATION_SECONDS = 15 * 60;
 
 const initialSearches = {
     name: "",
@@ -138,11 +147,6 @@ function normalizeText(value) {
         .trim();
 }
 
-/**
- * Trata registros nulos e respostas sem status.
- * Quando o backend não informa status, não descarta o registro
- * apenas por ausência desse campo.
- */
 function isActiveRecord(record) {
     if (!record || typeof record !== "object") {
         return false;
@@ -163,20 +167,83 @@ function getErrorMessage(error, fallback) {
     return error instanceof Error ? error.message : fallback;
 }
 
-/**
- * Produtos e serviços podem ter o mesmo ID.
- * A chave inclui o tipo para identificar cada item corretamente.
- */
 function getCashierItemKey(item) {
     return `${item.itemType || "product"}:${item.id}`;
 }
 
+function getPaymentType(methodName) {
+    const name = normalizeText(methodName);
+
+    if (name.includes("dinheiro")) return "cash";
+    if (name.includes("pix")) return "pix";
+    if (name.includes("debito")) return "debit";
+    if (name.includes("credito")) return "credit";
+
+    return "other";
+}
+
+function createTransactionId() {
+    const uuid = globalThis.crypto?.randomUUID?.();
+
+    if (uuid) {
+        return uuid.replace(/-/g, "").slice(0, 25);
+    }
+
+    return (
+        Date.now().toString(36) +
+        Math.random().toString(36).slice(2, 20)
+    ).slice(0, 25);
+}
+
+function getPixResponse(response) {
+    const data =
+        response?.data?.pix ??
+        response?.pix ??
+        response?.data ??
+        response;
+
+    if (data?.available === false) {
+        return {
+            available: false,
+            message:
+                data.message ||
+                "Não existe uma chave PIX cadastrada nas configurações."
+        };
+    }
+
+    const brCode = data?.brCode || data?.brcode;
+    const qrCodeImage =
+        data?.qrCodeImage ||
+        data?.qrCode ||
+        data?.image ||
+        null;
+
+    if (!brCode || !qrCodeImage) {
+        throw new Error(
+            "O backend não retornou o código PIX e a imagem do QR Code."
+        );
+    }
+
+    return {
+        ...data,
+        available: true,
+        brCode,
+        qrCodeImage
+    };
+}
+
+function formatTime(seconds) {
+    const safeSeconds = Math.max(0, seconds);
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = safeSeconds % 60;
+
+    return `${String(minutes).padStart(2, "0")}:${String(
+        remainingSeconds
+    ).padStart(2, "0")}`;
+}
+
 /**
- * Campo de pesquisa compartilhado entre produtos e serviços.
- *
- * searchCashierItems já consulta os dois tipos e retorna uma única
- * lista. Portanto, não se deve usar Promise.allSettled para dividir
- * novamente essa resposta.
+ * Pesquisa de produtos e serviços.
  */
 function ProductSearchField({
     field,
@@ -209,16 +276,13 @@ function ProductSearchField({
 
         const timeoutId = window.setTimeout(async () => {
             try {
-                // A API já retorna produtos e serviços em uma lista.
                 const results = await searchCashierItems(
                     field,
                     query,
                     controller.signal
                 );
 
-                if (controller.signal.aborted) {
-                    return;
-                }
+                if (controller.signal.aborted) return;
 
                 const items = Array.isArray(results) ? results : [];
 
@@ -246,19 +310,15 @@ function ProductSearchField({
                 setSearchError("");
                 setIsSearching(false);
             } catch (error) {
-                if (controller.signal.aborted) {
-                    return;
-                }
+                if (controller.signal.aborted) return;
 
                 setSuggestions([]);
-
                 setSearchError(
                     getErrorMessage(
                         error,
                         "Não foi possível pesquisar produtos e serviços."
                     )
                 );
-
                 setIsSearching(false);
             }
         }, 300);
@@ -281,13 +341,11 @@ function ProductSearchField({
         <div className={"cashier-search cashier-search--" + field}>
             <label className="cashier-search__field">
                 <span className="visually-hidden">{label}</span>
-
                 <CashierIcon name="search" />
 
                 <input
                     type="search"
                     autoComplete="off"
-
                     value={value}
                     placeholder={placeholder}
                     onChange={(event) => onChange(event.target.value)}
@@ -347,15 +405,11 @@ function ProductSearchField({
                                                 {item.itemType === "service"
                                                     ? "Serviço"
                                                     : "Produto"}
-
                                                 {" · "}
-
                                                 {item.sm_code ||
                                                     item.bar_code ||
                                                     "Sem código"}
-
                                                 {" · "}
-
                                                 {currencyFormatter.format(
                                                     parseNumber(item.value)
                                                 )}
@@ -371,6 +425,9 @@ function ProductSearchField({
     );
 }
 
+/**
+ * Pesquisa de clientes.
+ */
 function ClientSearchField({
     value,
     selectedClientId,
@@ -520,6 +577,230 @@ function ClientSearchField({
     );
 }
 
+/**
+ * Modal de pagamento.
+ *
+ * Para PIX com QR Code local, a confirmação é manual.
+ * Para débito/crédito, a confirmação também é manual.
+ * Sem chave PIX, exibe o aviso correspondente e não gera QR Code.
+ */
+function CashierPaymentModal({
+    payment,
+    onClose,
+    onConfirm,
+    isSaving
+}) {
+    const [copyMessage, setCopyMessage] = useState("");
+    const [secondsRemaining, setSecondsRemaining] = useState(
+        payment?.expiresAt
+            ? Math.max(
+                0,
+                Math.ceil((payment.expiresAt - Date.now()) / 1000)
+            )
+            : 0
+    );
+
+    const isPix = payment?.type === "pix";
+    const isPixQr = payment?.kind === "pix-qr";
+    const isPixWithoutKey = payment?.kind === "pix-no-key";
+    const isExpired = isPixQr && secondsRemaining <= 0;
+
+    useEffect(() => {
+        if (!payment?.expiresAt || !isPixQr) {
+            setSecondsRemaining(0);
+            return undefined;
+        }
+
+        function updateRemaining() {
+            setSecondsRemaining(
+                Math.max(
+                    0,
+                    Math.ceil((payment.expiresAt - Date.now()) / 1000)
+                )
+            );
+        }
+
+        updateRemaining();
+
+        const intervalId = window.setInterval(updateRemaining, 1000);
+
+        return () => window.clearInterval(intervalId);
+    }, [payment?.expiresAt, isPixQr]);
+
+    if (!payment) return null;
+
+    async function copyPixCode() {
+        if (!payment.pix?.brCode) return;
+
+        try {
+            await navigator.clipboard.writeText(payment.pix.brCode);
+            setCopyMessage("Código PIX copiado.");
+        } catch {
+            setCopyMessage(
+                "Não foi possível copiar automaticamente. Selecione o código e copie manualmente."
+            );
+        }
+    }
+
+    return (
+        <div
+            className="cashier-payment-modal"
+            role="presentation"
+            onMouseDown={(event) => {
+                if (
+                    event.target === event.currentTarget &&
+                    !isSaving
+                ) {
+                    onClose();
+                }
+            }}
+        >
+            <section
+                className="cashier-payment-modal__dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="cashier-payment-modal-title"
+            >
+                <div
+                    className="cashier-payment-modal__icon"
+                    aria-hidden="true"
+                >
+                    {isPix ? "▦" : "◷"}
+                </div>
+
+                <h2 id="cashier-payment-modal-title">
+                    Aguardando confirmação do pagamento
+                </h2>
+
+                <p>
+                    Forma de pagamento:{" "}
+                    <strong>{payment.methodName}</strong>
+                </p>
+
+                <div className="cashier-payment-modal__amount">
+                    <span>Valor total</span>
+                    <strong>
+                        {currencyFormatter.format(payment.amount)}
+                    </strong>
+                </div>
+
+                {isPixQr && (
+                    <>
+                        <p className="cashier-payment-modal__hint">
+                            Escaneie o QR Code com o aplicativo do banco ou
+                            copie o código PIX.
+                        </p>
+
+                        {payment.pix?.qrCodeImage && (
+                            <div className="cashier-payment-modal__qr">
+                                <img
+                                    src={payment.pix.qrCodeImage}
+                                    alt="QR Code PIX da venda"
+                                />
+                            </div>
+                        )}
+
+                        <div className="cashier-payment-modal__pix">
+                            <label htmlFor="cashier-pix-brcode">
+                                PIX copia e cola
+                            </label>
+
+                            <textarea
+                                id="cashier-pix-brcode"
+                                readOnly
+                                rows={4}
+                                value={payment.pix.brCode}
+                                onFocus={(event) =>
+                                    event.target.select()
+                                }
+                            />
+
+                            <button
+                                type="button"
+                                className="cashier-payment-modal__button cashier-payment-modal__button--secondary"
+                                onClick={copyPixCode}
+                            >
+                                Copiar código PIX
+                            </button>
+
+                            {copyMessage && (
+                                <p role="status">{copyMessage}</p>
+                            )}
+                        </div>
+
+                        <div className="cashier-payment-modal__countdown">
+                            <span>Tempo restante nesta tela</span>
+                            <strong>{formatTime(secondsRemaining)}</strong>
+                        </div>
+
+                        <p className="cashier-payment-modal__notice">
+                            O QR Code é estático: o prazo acima encerra esta
+                            sessão no caixa, mas não revoga o código no banco.
+                            Confirme o recebimento no extrato antes de registrar
+                            a venda.
+                        </p>
+                    </>
+                )}
+
+                {isPixWithoutKey && (
+                    <div
+                        className="cashier-payment-modal__warning"
+                        role="alert"
+                    >
+                        <strong>Chave PIX não configurada</strong>
+                        <p>
+                            Não existe uma chave PIX cadastrada nas
+                            configurações. Nenhum QR Code foi gerado.
+                            Cadastre a chave ou receba por outro meio e
+                            confirme somente após verificar o recebimento.
+                        </p>
+                    </div>
+                )}
+
+                {!isPix && (
+                    <p className="cashier-payment-modal__hint">
+                        Verifique se a transação foi aprovada na maquininha
+                        ou no sistema de pagamento antes de confirmar.
+                    </p>
+                )}
+
+                {isExpired && (
+                    <p
+                        className="cashier-payment-modal__error"
+                        role="alert"
+                    >
+                        O tempo desta sessão terminou. Esta tela não aceitará
+                        a confirmação. O QR Code estático, entretanto, não foi
+                        cancelado no banco.
+                    </p>
+                )}
+
+                <div className="cashier-payment-modal__actions">
+                    <button
+                        type="button"
+                        className="cashier-payment-modal__button cashier-payment-modal__button--secondary"
+                        onClick={onClose}
+                        disabled={isSaving}
+                    >
+                        Voltar ao caixa
+                    </button>
+
+                    <button
+                        type="button"
+                        className="cashier-payment-modal__button cashier-payment-modal__button--primary"
+                        onClick={onConfirm}
+                        disabled={isSaving || isExpired}
+                    >
+                        {isSaving
+                            ? "Registrando venda..."
+                            : "Confirmar recebimento e registrar venda"}
+                    </button>
+                </div>
+            </section>
+        </div>
+    );
+}
+
 export default function CashierPage() {
     const location = useLocation();
     const navigate = useNavigate();
@@ -535,6 +816,7 @@ export default function CashierPage() {
     const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
 
     const columnFilterRef = useRef(null);
+    const paymentSubmissionStartedRef = useRef(false);
 
     const [isLoadingPayment, setIsLoadingPayment] = useState(true);
     const [paymentError, setPaymentError] = useState("");
@@ -550,12 +832,14 @@ export default function CashierPage() {
     const [feedback, setFeedback] = useState(null);
     const [finalizationStage, setFinalizationStage] = useState(null);
     const [isFinalizing, setIsFinalizing] = useState(false);
+    const [isCreatingPixCode, setIsCreatingPixCode] = useState(false);
     const [isCheckingClient, setIsCheckingClient] = useState(false);
     const [resumeAfterRegistration, setResumeAfterRegistration] =
         useState(false);
     const [finalizationError, setFinalizationError] = useState("");
     const [taxIdDraft, setTaxIdDraft] = useState("");
     const [completedSale, setCompletedSale] = useState(null);
+    const [pendingPayment, setPendingPayment] = useState(null);
 
     const closeSalesModal = useCallback(() => {
         setIsSalesModalOpen(false);
@@ -736,8 +1020,8 @@ export default function CashierPage() {
         (method) => String(method.id) === paymentMethodId
     );
 
-    const isCreditPayment = normalizeText(selectedPaymentMethod?.name)
-        .includes("credito");
+    const paymentType = getPaymentType(selectedPaymentMethod?.name);
+    const isCreditPayment = paymentType === "credit";
 
     const selectedInstallment = installments.find(
         (installment) => String(installment.id) === installmentId
@@ -944,18 +1228,23 @@ export default function CashierPage() {
         setFeedback(null);
     }
 
+    /**
+     * Salva a venda depois que o fluxo de pagamento permite continuar.
+     */
     async function submitSale(
         taxIdOverride = null,
         clientOverride = null
     ) {
         if (
             isFinalizing ||
+            paymentSubmissionStartedRef.current ||
             selectedProducts.length === 0 ||
             !paymentMethodId
         ) {
             return;
         }
 
+        paymentSubmissionStartedRef.current = true;
         setIsFinalizing(true);
         setFinalizationError("");
 
@@ -970,7 +1259,7 @@ export default function CashierPage() {
                 clientName:
                     String(saleClientName ?? "").trim() || null,
                 clientId: saleClientId,
-                clientTaxId: taxIdOverride || null,
+                clientTaxId: taxIdOverride || clientTaxId || null,
                 paymentMethodId: Number(paymentMethodId),
                 installmentId:
                     isCreditPayment && installmentId
@@ -992,7 +1281,9 @@ export default function CashierPage() {
             });
 
             setCompletedSale(sale);
+            setPendingPayment(null);
             setFinalizationStage("success");
+
             setSelectedProducts([]);
             setClientName("");
             setClientId(null);
@@ -1000,15 +1291,136 @@ export default function CashierPage() {
             setTaxIdDraft("");
             setFeedback(null);
         } catch (error) {
-            setFinalizationError(
-                getErrorMessage(
-                    error,
-                    "Não foi possível registrar a venda."
-                )
+            paymentSubmissionStartedRef.current = false;
+
+            const message = getErrorMessage(
+                error,
+                "Não foi possível registrar a venda."
             );
+
+            setFinalizationError(message);
+            setFeedback({
+                kind: "error",
+                message
+            });
         } finally {
             setIsFinalizing(false);
         }
+    }
+
+    /**
+     * Abre o fluxo adequado conforme a forma de pagamento.
+     */
+    async function proceedWithPayment(
+        taxIdOverride = null,
+        clientOverride = null
+    ) {
+        if (
+            isFinalizing ||
+            isCreatingPixCode ||
+            selectedProducts.length === 0 ||
+            !paymentMethodId
+        ) {
+            return;
+        }
+
+        const paymentDetails = {
+            type: paymentType,
+            methodName: selectedPaymentMethod?.name || "Não informado",
+            amount: totalValue,
+            taxIdOverride: taxIdOverride || clientTaxId || null,
+            clientOverride
+        };
+
+        // Dinheiro: segue diretamente para o registro da venda.
+        if (paymentType === "cash") {
+            setPendingPayment(null);
+            setFinalizationStage("submitting");
+
+            void submitSale(
+                paymentDetails.taxIdOverride,
+                clientOverride
+            );
+
+            return;
+        }
+
+        // Cartão ou outra forma não-PIX: aguarda a confirmação manual.
+        if (paymentType !== "pix") {
+            setPendingPayment({
+                ...paymentDetails,
+                kind: "manual"
+            });
+
+            setFinalizationStage("awaiting-payment");
+            return;
+        }
+
+        // PIX: o código e a imagem são gerados pelo backend com GPIX.
+        setIsCreatingPixCode(true);
+        setFeedback(null);
+
+        try {
+            const response = await createCashierPixCode({
+                amountInCents: Math.round(totalValue * 100),
+                expiresInSeconds: PIX_QR_EXPIRATION_SECONDS,
+                transactionId: createTransactionId()
+            });
+
+            const pix = getPixResponse(response);
+
+            if (!pix.available) {
+                setPendingPayment({
+                    ...paymentDetails,
+                    kind: "pix-no-key",
+                    pix: null
+                });
+
+                setFinalizationStage("awaiting-payment");
+                return;
+            }
+
+            setPendingPayment({
+                ...paymentDetails,
+                kind: "pix-qr",
+                pix,
+                expiresAt:
+                    Date.now() + PIX_QR_EXPIRATION_SECONDS * 1000
+            });
+
+            setFinalizationStage("awaiting-payment");
+        } catch (error) {
+            setFeedback({
+                kind: "error",
+                message: getErrorMessage(
+                    error,
+                    "Não foi possível gerar o QR Code PIX."
+                )
+            });
+        } finally {
+            setIsCreatingPixCode(false);
+        }
+    }
+
+    function confirmManualPayment() {
+        if (!pendingPayment || isFinalizing) return;
+
+        const payment = pendingPayment;
+
+        setFinalizationStage("submitting");
+
+        void submitSale(
+            payment.taxIdOverride,
+            payment.clientOverride
+        );
+    }
+
+    function closePendingPayment() {
+        if (isFinalizing || isCreatingPixCode) return;
+
+        setPendingPayment(null);
+        setFinalizationStage(null);
+        setFinalizationError("");
     }
 
     async function handleFinalizeSale() {
@@ -1016,7 +1428,9 @@ export default function CashierPage() {
             saleItemCount === 0 ||
             !paymentMethodId ||
             isFinalizing ||
-            isCheckingClient
+            isCreatingPixCode ||
+            isCheckingClient ||
+            finalizationStage !== null
         ) {
             return;
         }
@@ -1024,6 +1438,7 @@ export default function CashierPage() {
         setFeedback(null);
         setFinalizationError("");
         setTaxIdDraft("");
+        paymentSubmissionStartedRef.current = false;
 
         if (clientName.trim() && clientId === null) {
             setIsCheckingClient(true);
@@ -1061,8 +1476,7 @@ export default function CashierPage() {
                     setClientTaxId(taxId);
 
                     if (taxId) {
-                        setFinalizationStage("submitting");
-                        void submitSale(null, client);
+                        await proceedWithPayment(taxId, client);
                     } else {
                         setFinalizationStage("ask-tax-id");
                     }
@@ -1097,17 +1511,12 @@ export default function CashierPage() {
             }
         }
 
-        const hasKnownTaxId = Boolean(clientTaxId.trim());
-
-        setFinalizationStage(
-            clientName.trim() && !hasKnownTaxId
-                ? "ask-tax-id"
-                : "submitting"
-        );
-
-        if (!clientName.trim() || hasKnownTaxId) {
-            void submitSale(null);
+        if (clientName.trim() && !clientTaxId.trim()) {
+            setFinalizationStage("ask-tax-id");
+            return;
         }
+
+        await proceedWithPayment(clientTaxId || null);
     }
 
     useEffect(() => {
@@ -1116,14 +1525,14 @@ export default function CashierPage() {
         setResumeAfterRegistration(false);
         setFinalizationError("");
         setTaxIdDraft("");
+        paymentSubmissionStartedRef.current = false;
 
         if (clientName.trim() && !clientTaxId.trim()) {
             setFinalizationStage("ask-tax-id");
             return;
         }
 
-        setFinalizationStage("submitting");
-        void submitSale(null);
+        void proceedWithPayment(clientTaxId || null);
     }, [resumeAfterRegistration, isLoadingPayment]);
 
     function handleTaxIdSubmit() {
@@ -1139,7 +1548,8 @@ export default function CashierPage() {
             return;
         }
 
-        void submitSale(normalizedTaxId);
+        setFinalizationError("");
+        void proceedWithPayment(normalizedTaxId);
     }
 
     function closeFinalizationModal() {
@@ -1148,17 +1558,25 @@ export default function CashierPage() {
         setFinalizationStage(null);
         setFinalizationError("");
         setCompletedSale(null);
+        setPendingPayment(null);
     }
 
     return (
         <main className="cashier-page">
             <header className="cashier-header">
-                <h1 className="cashier-header__brand"
-                onClick={() =>{window.location.href="/"}} >
+                <h1
+                    className="cashier-header__brand"
+                    onClick={() => {
+                        window.location.href = "/";
+                    }}
+                >
                     POSSO AJUDAR?
                 </h1>
 
-                <span className="cashier-header__page-title" style={{paddingRight: "50px"}}>
+                <span
+                    className="cashier-header__page-title"
+                    style={{ paddingRight: "50px" }}
+                >
                     Caixa
                 </span>
             </header>
@@ -1183,7 +1601,7 @@ export default function CashierPage() {
                             aria-controls="cashier-column-filter-menu"
                             title="Configurar colunas da tabela"
                             onClick={() =>
-                                setIsColumnMenuOpen((isOpen) => !isOpen)
+                                setIsColumnMenuOpen((value) => !value)
                             }
                         >
                             <CashierIcon name="filter" />
@@ -1243,14 +1661,10 @@ export default function CashierPage() {
                                     type="button"
                                     aria-pressed={inStockOnly}
                                     onClick={() =>
-                                        setInStockOnly(
-                                            (currentValue) => !currentValue
-                                        )
+                                        setInStockOnly((value) => !value)
                                     }
                                 >
-                                    <span>
-                                        Somente produtos com estoque
-                                    </span>
+                                    <span>Somente produtos com estoque</span>
 
                                     <span
                                         className="cashier-column-filter__switch"
@@ -1283,9 +1697,7 @@ export default function CashierPage() {
                         placeholder="Produto ou serviço"
                         value={searches.name}
                         inStockOnly={inStockOnly}
-                        onChange={(value) =>
-                            updateSearch("name", value)
-                        }
+                        onChange={(value) => updateSearch("name", value)}
                         onSelect={addProductToSale}
                     />
 
@@ -1295,9 +1707,7 @@ export default function CashierPage() {
                         placeholder="Código Reduzido"
                         value={searches.smCode}
                         inStockOnly={inStockOnly}
-                        onChange={(value) =>
-                            updateSearch("smCode", value)
-                        }
+                        onChange={(value) => updateSearch("smCode", value)}
                         onSelect={addProductToSale}
                     />
 
@@ -1307,9 +1717,7 @@ export default function CashierPage() {
                         placeholder="Código de Barras"
                         value={searches.barCode}
                         inStockOnly={inStockOnly}
-                        onChange={(value) =>
-                            updateSearch("barCode", value)
-                        }
+                        onChange={(value) => updateSearch("barCode", value)}
                         onSelect={addProductToSale}
                     />
 
@@ -1372,9 +1780,7 @@ export default function CashierPage() {
                                         unitPrice
                                     } = saleItem;
 
-                                    const itemKey =
-                                        getCashierItemKey(product);
-
+                                    const itemKey = getCashierItemKey(product);
                                     const isService =
                                         product.itemType === "service";
 
@@ -1419,16 +1825,15 @@ export default function CashierPage() {
                                                         </output>
                                                     )}
 
-                                                    {column.key === "stock" && (
-                                                        isService
+                                                    {column.key === "stock" &&
+                                                        (isService
                                                             ? "Não aplicável"
                                                             : parseNumber(product.amount) +
                                                               " " +
-                                                              (product.unit_measure || "UN")
-                                                    )}
+                                                              (product.unit_measure || "UN"))}
 
-                                                    {column.key === "unitPrice" && (
-                                                        editingPriceId === itemKey ? (
+                                                    {column.key === "unitPrice" &&
+                                                        (editingPriceId === itemKey ? (
                                                             <div className="cashier-price-editor">
                                                                 <input
                                                                     autoFocus
@@ -1466,11 +1871,8 @@ export default function CashierPage() {
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            currencyFormatter.format(
-                                                                unitPrice
-                                                            )
-                                                        )
-                                                    )}
+                                                            currencyFormatter.format(unitPrice)
+                                                        ))}
                                                 </td>
                                             ))}
 
@@ -1503,7 +1905,6 @@ export default function CashierPage() {
                                                             product.name
                                                         }
                                                         title="Remover uma unidade"
-                                                        disabled={quantity === 0}
                                                         onClick={() =>
                                                             changeSaleQuantity(
                                                                 itemKey,
@@ -1564,9 +1965,7 @@ export default function CashierPage() {
                     <div className="cashier-total">
                         <h2>TOTAL</h2>
 
-                        <output>
-                            {currencyFormatter.format(totalValue)}
-                        </output>
+                        <output>{currencyFormatter.format(totalValue)}</output>
 
                         {installmentSurcharge > 0 && (
                             <small className="cashier-total__surcharge">
@@ -1603,7 +2002,8 @@ export default function CashierPage() {
                                 value={paymentMethodId}
                                 disabled={
                                     isLoadingPayment ||
-                                    paymentMethods.length === 0
+                                    paymentMethods.length === 0 ||
+                                    finalizationStage !== null
                                 }
                                 onChange={(event) =>
                                     setPaymentMethodId(event.target.value)
@@ -1641,7 +2041,10 @@ export default function CashierPage() {
 
                                 <select
                                     value={installmentId}
-                                    disabled={installments.length === 0}
+                                    disabled={
+                                        installments.length === 0 ||
+                                        finalizationStage !== null
+                                    }
                                     onChange={(event) =>
                                         setInstallmentId(event.target.value)
                                     }
@@ -1673,20 +2076,25 @@ export default function CashierPage() {
                                 saleItemCount === 0 ||
                                 !paymentMethodId ||
                                 isFinalizing ||
-                                isCheckingClient
+                                isCreatingPixCode ||
+                                isCheckingClient ||
+                                finalizationStage !== null
                             }
                             onClick={handleFinalizeSale}
                         >
                             {isCheckingClient
                                 ? "Verificando cliente..."
-                                : isFinalizing
-                                    ? "Finalizando..."
-                                    : "Finalizar"}
+                                : isCreatingPixCode
+                                    ? "Gerando QR Code..."
+                                    : isFinalizing
+                                        ? "Finalizando..."
+                                        : "Finalizar"}
                         </button>
 
                         <button
                             className="cashier-checkout__button"
                             type="button"
+                            disabled={finalizationStage !== null}
                             onClick={handleClientSearch}
                         >
                             Buscar Clientes
@@ -1700,11 +2108,7 @@ export default function CashierPage() {
                             "cashier-feedback cashier-feedback--" +
                             feedback.kind
                         }
-                        role={
-                            feedback.kind === "error"
-                                ? "alert"
-                                : "status"
-                        }
+                        role={feedback.kind === "error" ? "alert" : "status"}
                     >
                         {feedback.message}
                     </p>
@@ -1722,26 +2126,255 @@ export default function CashierPage() {
                 />
             )}
 
-            {finalizationStage && (
-                <CashierFinalizationModal
-                    stage={finalizationStage}
-                    clientName={clientName}
-                    taxId={taxIdDraft}
-                    onTaxIdChange={setTaxIdDraft}
-                    errorMessage={finalizationError}
-                    isSubmitting={isFinalizing}
-                    sale={completedSale}
-                    onAddTaxId={() => {
-                        setFinalizationError("");
-                        setFinalizationStage("tax-id");
-                    }}
-                    onContinueWithoutTaxId={() => void submitSale(null)}
-                    onSubmitTaxId={handleTaxIdSubmit}
-                    onClose={closeFinalizationModal}
-                    onDownloadPdf={printSalePdf}
-                    onDownloadXml={drawCupon}
+            {finalizationStage === "awaiting-payment" && pendingPayment && (
+                <CashierPaymentModal
+                    payment={pendingPayment}
+                    onClose={closePendingPayment}
+                    onConfirm={confirmManualPayment}
+                    isSaving={isFinalizing}
                 />
             )}
+
+            {finalizationStage &&
+                finalizationStage !== "awaiting-payment" && (
+                    <CashierFinalizationModal
+                        stage={finalizationStage}
+                        clientName={clientName}
+                        taxId={taxIdDraft}
+                        onTaxIdChange={setTaxIdDraft}
+                        errorMessage={finalizationError}
+                        isSubmitting={isFinalizing}
+                        sale={completedSale}
+                        onAddTaxId={() => {
+                            setFinalizationError("");
+                            setFinalizationStage("tax-id");
+                        }}
+                        onContinueWithoutTaxId={() =>
+                            void proceedWithPayment(null)
+                        }
+                        onSubmitTaxId={handleTaxIdSubmit}
+                        onClose={closeFinalizationModal}
+                        onDownloadPdf={printSalePdf}
+                        onDownloadXml={drawCupon}
+                    />
+                )}
+
+            <style>{`
+                .cashier-payment-modal {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                    background: rgba(0, 0, 0, 0.68);
+                    overflow-y: auto;
+                }
+
+                .cashier-payment-modal__dialog {
+                    width: min(100%, 500px);
+                    max-height: calc(100vh - 40px);
+                    overflow-y: auto;
+                    padding: 28px;
+                    border-radius: 14px;
+                    background: #fff;
+                    color: #222;
+                    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+                    font-family: inherit;
+                }
+
+                .cashier-payment-modal__icon {
+                    display: grid;
+                    place-items: center;
+                    width: 48px;
+                    height: 48px;
+                    margin-bottom: 18px;
+                    border-radius: 50%;
+                    background: #f0f0f0;
+                    font-size: 25px;
+                }
+
+                .cashier-payment-modal__dialog h2 {
+                    margin: 0 0 12px;
+                    font-size: 1.35rem;
+                    line-height: 1.35;
+                }
+
+                .cashier-payment-modal__dialog p {
+                    line-height: 1.55;
+                    overflow-wrap: anywhere;
+                }
+
+                .cashier-payment-modal__amount {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                    margin: 20px 0;
+                    padding: 16px;
+                    border-radius: 10px;
+                    background: #f5f5f5;
+                }
+
+                .cashier-payment-modal__amount span,
+                .cashier-payment-modal__countdown span {
+                    color: #666;
+                    font-size: 0.9rem;
+                }
+
+                .cashier-payment-modal__amount strong {
+                    font-size: 1.8rem;
+                    overflow-wrap: anywhere;
+                }
+
+                .cashier-payment-modal__qr {
+                    display: grid;
+                    place-items: center;
+                    margin: 16px auto;
+                    padding: 12px;
+                    border: 1px solid #eee;
+                    border-radius: 12px;
+                    background: #fff;
+                }
+
+                .cashier-payment-modal__qr img {
+                    display: block;
+                    width: min(100%, 260px);
+                    height: auto;
+                    aspect-ratio: 1;
+                    object-fit: contain;
+                }
+
+                .cashier-payment-modal__pix {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    margin-bottom: 18px;
+                }
+
+                .cashier-payment-modal__pix label {
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                }
+
+                .cashier-payment-modal__pix textarea {
+                    width: 100%;
+                    min-width: 0;
+                    box-sizing: border-box;
+                    padding: 12px;
+                    border: 1px solid #ccc;
+                    border-radius: 8px;
+                    background: #fff;
+                    color: #222;
+                    font: inherit;
+                    resize: vertical;
+                    overflow-wrap: anywhere;
+                }
+
+                .cashier-payment-modal__hint {
+                    margin: 4px 0 18px;
+                    color: #666;
+                    font-size: 0.9rem;
+                }
+
+                .cashier-payment-modal__warning {
+                    margin: 16px 0;
+                    padding: 14px;
+                    border: 1px solid #e6c779;
+                    border-radius: 8px;
+                    background: #fff8e5;
+                    color: #664d03;
+                    font-size: 0.9rem;
+                }
+
+                .cashier-payment-modal__warning p {
+                    margin-bottom: 0;
+                }
+
+                .cashier-payment-modal__notice {
+                    color: #666;
+                    font-size: 0.85rem;
+                }
+
+                .cashier-payment-modal__countdown {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
+                    margin: 16px 0;
+                    padding: 12px;
+                    border-radius: 8px;
+                    background: #f5f5f5;
+                }
+
+                .cashier-payment-modal__countdown strong {
+                    font-size: 1.25rem;
+                    font-variant-numeric: tabular-nums;
+                }
+
+                .cashier-payment-modal__error {
+                    color: #b42318;
+                    font-size: 0.9rem;
+                }
+
+                .cashier-payment-modal__actions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                    gap: 10px;
+                    margin-top: 24px;
+                }
+
+                .cashier-payment-modal__button {
+                    min-height: 44px;
+                    padding: 11px 15px;
+                    border: 1px solid transparent;
+                    border-radius: 8px;
+                    font: inherit;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+
+                .cashier-payment-modal__button:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+
+                .cashier-payment-modal__button--secondary {
+                    border-color: #ccc;
+                    background: #fff;
+                    color: #222;
+                }
+
+                .cashier-payment-modal__button--primary {
+                    background: #222;
+                    color: #fff;
+                }
+
+                @media (max-width: 520px) {
+                    .cashier-payment-modal {
+                        align-items: flex-start;
+                        padding: 12px;
+                    }
+
+                    .cashier-payment-modal__dialog {
+                        max-height: calc(100vh - 24px);
+                        padding: 20px;
+                    }
+
+                    .cashier-payment-modal__actions {
+                        flex-direction: column-reverse;
+                    }
+
+                    .cashier-payment-modal__button {
+                        width: 100%;
+                    }
+
+                    .cashier-payment-modal__amount strong {
+                        font-size: 1.5rem;
+                    }
+                }
+            `}</style>
         </main>
     );
 }

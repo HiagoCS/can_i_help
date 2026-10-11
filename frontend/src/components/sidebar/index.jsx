@@ -15,7 +15,7 @@ const menuSections = [
         title: "Produtos",
         items: [
             { label: "Visão Geral", path: "/produtos/visao-geral", icon: "eye" },
-            { label: "Estoque", path: "/produtos/estoque", icon: "box" },
+            { label: "Movimentações", path: "/produtos/estoque", icon: "box" },
             { label: "Relatórios", path: "/produtos/relatorios", icon: "file" }
         ]
     },

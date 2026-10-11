@@ -129,6 +129,15 @@ async function getData<T>(
     return result.data;
 }
 
+/**
+ * Envia dados via POST.
+ *
+ * Mantém o formato convencional { data: ... } utilizado pelo restante da API.
+ * Para a rota PIX, também aceita a resposta direta do gerador:
+ * { available: true, brCode: "...", qrCodeImage: "..." }.
+ *
+ * Não altera o comportamento dos outros endpoints que utilizam postData.
+ */
 async function postData<T>(
     path: string,
     payload: unknown
@@ -140,34 +149,141 @@ async function postData<T>(
             method: "POST",
             credentials: "include",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                Accept: "application/json"
             },
             body: JSON.stringify(payload)
         });
-    } catch {
+    } catch (error) {
+        console.error("[postData] Falha de conexão:", {
+            path,
+            error
+        });
+
         throw new Error(
             "Não foi possível conectar ao servidor. Verifique a conexão e tente novamente."
         );
     }
 
-    const result = await response
-        .json()
-        .catch(() => null) as ApiResponse<T> | null;
+    let responseText: string;
+
+    try {
+        responseText = await response.text();
+    } catch (error) {
+        console.error("[postData] Falha ao ler a resposta:", {
+            path,
+            status: response.status,
+            error
+        });
+
+        throw new Error("Não foi possível ler a resposta do servidor.");
+    }
+
+    let parsedResponse: unknown = null;
+
+    if (responseText.trim()) {
+        try {
+            parsedResponse = JSON.parse(responseText);
+        } catch {
+            console.error("[postData] Resposta não é JSON válido:", {
+                path,
+                status: response.status,
+                contentType: response.headers.get("content-type"),
+                responseBody: responseText.slice(0, 1500)
+            });
+        }
+    } else {
+        console.error("[postData] Resposta vazia:", {
+            path,
+            status: response.status,
+            statusText: response.statusText
+        });
+    }
+
+    const responseObject =
+        parsedResponse !== null &&
+        typeof parsedResponse === "object" &&
+        !Array.isArray(parsedResponse)
+            ? parsedResponse as Record<string, unknown>
+            : null;
 
     if (!response.ok) {
+        const message =
+            typeof responseObject?.message === "string"
+                ? responseObject.message
+                : response.status === 401
+                    ? "Sua sessão expirou. Entre novamente no sistema."
+                    : "Não foi possível concluir a operação.";
+
+        console.error("[postData] Erro HTTP:", {
+            path,
+            status: response.status,
+            statusText: response.statusText,
+            contentType: response.headers.get("content-type"),
+            responseBody: responseText.slice(0, 1500)
+        });
+
+        throw new Error(message);
+    }
+
+    if (!responseObject) {
+        console.error("[postData] Resposta inválida:", {
+            path,
+            status: response.status,
+            contentType: response.headers.get("content-type"),
+            responseBody: responseText.slice(0, 1500)
+        });
+
         throw new Error(
-            result?.message ??
-            (response.status === 401
-                ? "Sua sessão expirou. Entre novamente no sistema."
-                : "Não foi possível concluir a operação.")
+            "O servidor retornou uma resposta inválida. Consulte o console para investigar."
         );
     }
 
-    if (result?.data === undefined || result.data === null) {
-        throw new Error("O servidor retornou uma resposta inválida.");
+    /*
+     * Formato padrão da API:
+     * { data: resultado, message?: string }
+     */
+    if (Object.prototype.hasOwnProperty.call(responseObject, "data")) {
+        if (
+            responseObject.data === undefined ||
+            responseObject.data === null
+        ) {
+            console.error("[postData] A propriedade data está vazia:", {
+                path,
+                status: response.status,
+                responseKeys: Object.keys(responseObject)
+            });
+
+            throw new Error(
+                "O servidor retornou uma resposta sem os dados esperados."
+            );
+        }
+
+        return responseObject.data as T;
     }
 
-    return result.data;
+    /*
+     * Formato direto específico da rota PIX.
+     * Não aceitar objetos sem data genericamente evita alterar
+     * silenciosamente o contrato dos outros endpoints.
+     */
+    if (
+        path === "/api/cashier/pix-code" &&
+        Object.prototype.hasOwnProperty.call(responseObject, "available")
+    ) {
+        return responseObject as T;
+    }
+
+    console.error("[postData] Formato inesperado:", {
+        path,
+        status: response.status,
+        responseKeys: Object.keys(responseObject),
+        responseBody: responseText.slice(0, 1500)
+    });
+
+    throw new Error(
+        "O servidor retornou JSON em um formato não reconhecido."
+    );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -491,6 +607,7 @@ export async function searchCashierProducts(
 
     return Array.isArray(result?.data) ? result.data : [];
 }
+
 export type CashierSearchItem =
     | (CashierProduct & {
         itemType: "product";
@@ -552,7 +669,7 @@ export async function searchCashierItems(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Vendas                                                                      */
+/* Vendas                                                                     */
 /* -------------------------------------------------------------------------- */
 
 export interface CashierSale {
@@ -601,7 +718,6 @@ export type CashierNFeStatus =
     | "rejected"
     | "cancelled"
     | "error";
-
 
 export interface CashierCompletedSale {
     id: number;
@@ -694,6 +810,7 @@ export async function createCashierSale(
 
     return result.data;
 }
+
 /* -------------------------------------------------------------------------- */
 /* Exclusão de vendas                                                         */
 /* -------------------------------------------------------------------------- */
@@ -715,8 +832,6 @@ export interface CashierDeleteSaleResult {
 export async function deleteCashierSale(
     saleId: number
 ): Promise<CashierDeleteSaleResult> {
-
-    // Valida e monta a rota usando o helper já existente.
     const endpoint = getSaleEndpoint(saleId);
 
     let response: Response;
@@ -780,6 +895,7 @@ export async function deleteCashierSale(
 
     return result.data;
 }
+
 /* -------------------------------------------------------------------------- */
 /* Documentos da venda                                                        */
 /* -------------------------------------------------------------------------- */
@@ -812,7 +928,6 @@ export function getCashierFiscalCoupon(
     );
 }
 
-
 export function getCashierDanfePdf(
     saleId: number,
     signal?: AbortSignal
@@ -828,7 +943,7 @@ export function getCashierDanfePdf(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Clientes                                                                    */
+/* Clientes                                                                   */
 /* -------------------------------------------------------------------------- */
 
 export interface CashierClient {
@@ -851,6 +966,39 @@ export function getCashierClients(
 export interface CashierClientCreateInput {
     name: string;
     cpf?: string | null;
+    cnpj?: string | null;
+}
+
+export interface CashierPixCodeRequest {
+    amountInCents: number;
+    expiresInSeconds?: number;
+    transactionId?: string;
+}
+
+export interface CashierPixCodeResponse {
+    available: boolean;
+    message?: string;
+    brCode?: string;
+    qrCodeImage?: string;
+    description?: string;
+    companyName?: string;
+    transactionId?: string;
+    expiresInSeconds?: number;
+}
+
+/**
+ * Gera os dados do PIX.
+ *
+ * Aceita tanto a resposta convencional { data: ... } quanto o objeto
+ * diretamente retornado pelo endpoint /api/cashier/pix-code.
+ */
+export function createCashierPixCode(
+    data: CashierPixCodeRequest
+): Promise<CashierPixCodeResponse> {
+    return postData<CashierPixCodeResponse>(
+        "/api/cashier/pix-code",
+        data
+    );
 }
 
 export async function createCashierClient(

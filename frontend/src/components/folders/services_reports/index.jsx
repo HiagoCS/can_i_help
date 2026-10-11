@@ -340,7 +340,7 @@ function reportPdf(rows, range, title, popup) {
         safe(new Date().toLocaleString("pt-BR")) +
         " · Serviços listados: " +
         rows.length +
-        "</div><div class='totals'><span><b>Unidades vendidas</b>" +
+        "</div><div class='totals'><span><b>Ganhos</b>" +
         qty(totals.unitsSold) +
         "</span><span><b>Receita</b>" +
         money(totals.revenue) +
@@ -348,7 +348,7 @@ function reportPdf(rows, range, title, popup) {
         money(totals.salesCost) +
         "</span><span><b>Resultado bruto</b>" +
         money(totals.revenue - totals.salesCost) +
-        "</span></div><table><thead><tr><th>#</th><th>Serviço</th><th>Unidades vendidas</th><th>Custo de venda</th><th>Receita</th><th>Resultado bruto</th></tr></thead><tbody>" +
+        "</span></div><table><thead><tr><th>#</th><th>Serviço</th><th>Ganhos</th><th>Custo de venda</th><th>Receita</th><th>Resultado bruto</th></tr></thead><tbody>" +
         body +
         "<tr class='total'><td colspan='2'>TOTAL</td><td>" +
         qty(totals.unitsSold) +
@@ -550,7 +550,7 @@ export default function ServicesReportsPage() {
                             <div className="services-reports__legend">
                                 <span>
                                     <i style={{ background: chartColor }} />
-                                    Unidades vendidas
+                                    Ganhos por serviço
                                 </span>
                             </div>
                         </div>
@@ -628,7 +628,7 @@ export default function ServicesReportsPage() {
                                                         row.name +
                                                         " — " +
                                                         qty(value) +
-                                                        " unidades vendidas"
+                                                        "Ganhos"
                                                     }
                                                     className={
                                                         "services-reports__bar-group" +
@@ -749,7 +749,7 @@ export default function ServicesReportsPage() {
 
                                 <div className="services-reports__metrics">
                                     <p>
-                                        <span>Unidades vendidas</span>
+                                        <span>Serviços Vendidos</span>
                                         <b>
                                             {qty(selectedTotals.unitsSold)}
                                         </b>
@@ -826,7 +826,7 @@ export default function ServicesReportsPage() {
                             </p>
 
                             <p>
-                                <span>UNIDADES VENDIDAS</span>
+                                <span>SERVIÇOS VENDIDOS</span>
                                 <b>{qty(allTotals.unitsSold)}</b>
                             </p>
                         </div>

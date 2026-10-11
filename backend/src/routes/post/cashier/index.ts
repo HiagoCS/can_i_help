@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+const { randomUUID } = require("node:crypto");
+const { PIX } = require("gpix/dist");
 const { sqlite } = require("../../../db/index");
 const { recordProductMovement } = require("../../../db/product_stock");
 interface RequestedSaleItem {
@@ -790,5 +792,165 @@ async function cashier(fastify: FastifyInstance) {
             }
         }
     );
+
+// Ajuste o nome da variável conforme sua conexão SQLite atual.
+fastify.post(
+    "/cashier/pix-code",
+    {
+        onRequest: [fastify.authenticate]
+    },
+    async (request, reply) => {
+        try {
+            const body = (request.body ?? {}) as {
+                amountInCents?: number | string;
+                transactionId?: string;
+                expiresInSeconds?: number | string;
+            };
+
+            const amountInCents = Number(body.amountInCents);
+
+            if (
+                !Number.isSafeInteger(amountInCents) ||
+                amountInCents <= 0
+            ) {
+                return reply.code(400).send({
+                    message: "O valor da venda deve ser informado em centavos."
+                });
+            }
+
+            const company = sqlite.prepare(`
+                SELECT *
+                FROM company
+                LIMIT 1
+            `).get();
+
+            const pixKey = String(
+                company?.pix_key ?? ""
+            ).trim();
+
+            if (!pixKey) {
+                return reply.send({
+                    available: false,
+                    message: "Não existe uma chave PIX cadastrada nas configurações."
+                });
+            }
+
+            const companyName = String(
+                company.trade_name ||
+                company.legal_name ||
+                ""
+            ).trim();
+
+            if (!companyName) {
+                return reply.code(400).send({
+                    message: "Cadastre o nome da empresa antes de gerar o PIX."
+                });
+            }
+
+            /*
+             * Os limites de nome e cidade são tratados antes de enviar
+             * os valores à biblioteca.
+             */
+            function normalizePixText(value: unknown, maxLength: number) {
+                return String(value ?? "")
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-zA-Z0-9 ]/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .toUpperCase()
+                    .slice(0, maxLength);
+            }
+
+            const receiverName = normalizePixText(companyName, 25);
+
+            const receiverCity = normalizePixText(
+                company.city ||
+                company.municipality ||
+                company.location ||
+                process.env.PIX_RECEIVER_CITY ||
+                "",
+                15
+            );
+
+            if (!receiverCity) {
+                return reply.code(400).send({
+                    message:
+                        "Configure a cidade da empresa ou a variável PIX_RECEIVER_CITY."
+                });
+            }
+
+            const rawTransactionId = String(
+                body.transactionId || ""
+            ).trim();
+
+            const transactionId = rawTransactionId
+                .replace(/[^a-zA-Z0-9]/g, "")
+                .slice(0, 25) || randomUUID().replace(/-/g, "").slice(0, 25);
+
+            const description = (
+                `Pagamento para ${company.trade_name || company.legal_name}`
+            ).slice(0, 72);
+
+            const pix = PIX.static()
+                .setReceiverName(receiverName)
+                .setReceiverCity(receiverCity)
+                .setKey(pixKey)
+                .setIdentificator(transactionId)
+                .setDescription(description)
+                .isUniqueTransaction(true)
+                .setAmount(amountInCents / 100);
+
+            const brCode = pix.getBRCode();
+            const qrResult = await pix.getQRCode();
+
+            let qrCodeImage: string;
+
+            if (Buffer.isBuffer(qrResult)) {
+                qrCodeImage =
+                    `data:image/png;base64,${qrResult.toString("base64")}`;
+            } else if (
+                typeof qrResult === "string" &&
+                qrResult.startsWith("data:image/")
+            ) {
+                qrCodeImage = qrResult;
+            } else if (
+                typeof qrResult === "string" &&
+                qrResult.trim().startsWith("<svg")
+            ) {
+                qrCodeImage =
+                    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrResult)}`;
+            } else if (typeof qrResult === "string") {
+                qrCodeImage = `data:image/png;base64,${qrResult}`;
+            } else {
+                throw new Error(
+                    "A biblioteca GPIX não retornou uma imagem reconhecida."
+                );
+            }
+
+            return reply.send({
+                available: true,
+                brCode,
+                qrCodeImage,
+                description,
+                companyName,
+                transactionId,
+                expiresInSeconds: Number(
+                    body.expiresInSeconds ||
+                    15 * 60
+                )
+            });
+        } catch (error) {
+            request.log.error(error);
+
+            return reply.code(500).send({
+                message:
+                    error instanceof Error
+                        ? error.message
+                        : "Não foi possível gerar o código PIX."
+            });
+        }
+    }
+);
 }
 module.exports = cashier;

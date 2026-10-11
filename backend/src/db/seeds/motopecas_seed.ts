@@ -233,8 +233,9 @@ function upsertCompany(bossUserId: number): void {
             city,
             city_ibge,
             state,
-            zip_code
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            zip_code,
+            pix_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             boss_user_id = excluded.boss_user_id,
             cnpj = excluded.cnpj,
@@ -247,7 +248,8 @@ function upsertCompany(bossUserId: number): void {
             city = excluded.city,
             city_ibge = excluded.city_ibge,
             state = excluded.state,
-            zip_code = excluded.zip_code
+            zip_code = excluded.zip_code,
+            pix_key = excluded.pix_key
     `).run(
         1,
         bossUserId,
@@ -261,7 +263,8 @@ function upsertCompany(bossUserId: number): void {
         "Peruíbe",
         "3537606",
         "SP",
-        "11750-000"
+        "11750-000",
+        "hiago8cs@gmail.com"
     );
 }
 
