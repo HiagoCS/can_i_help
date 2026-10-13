@@ -95,68 +95,6 @@ const companyTable = sqliteTable("company", {
 
     zipCode: text("zip_code")
 });
-
-// ============================================================
-// FISCAL CONFIG
-// Mantida para a funcionalidade de NF-e.
-// Não faz parte da seed operacional.
-// ============================================================
-
-const fiscalConfigTable = sqliteTable("fiscal_config", {
-    id: integer("id").primaryKey(),
-
-    companyId: integer("company_id")
-        .notNull()
-        .references(() => companyTable.id),
-
-    taxRegime: text("tax_regime")
-        .notNull(),
-
-    cfopDefault: text("cfop_default")
-        .notNull(),
-
-    ncmDefault: text("ncm_default")
-        .notNull(),
-
-    natOpDefault: text("nat_op_default")
-        .notNull()
-        .default("Venda de Mercadoria"),
-
-    ibs: real("ibs")
-        .notNull()
-        .default(0),
-
-    cbs: real("cbs")
-        .notNull()
-        .default(0)
-});
-
-// ============================================================
-// FISCAL CERTIFICATES
-// ============================================================
-
-const fiscalCertificateTable = sqliteTable("fiscal_certificates", {
-    id: integer("id").primaryKey(),
-
-    companyId: integer("company_id")
-        .notNull()
-        .references(() => companyTable.id),
-
-    certificate: text("certificate")
-        .notNull(),
-
-    password: text("password")
-        .notNull(),
-
-    validFrom: text("valid_from"),
-
-    validUntil: text("valid_until"),
-
-    status: integer("status", { mode: "boolean" })
-        .notNull()
-        .default(false)
-});
-
 // ============================================================
 // UNITS OF MEASURE
 // ============================================================
@@ -703,8 +641,6 @@ module.exports = {
     rolesUserTable,
 
     companyTable,
-    fiscalConfigTable,
-    fiscalCertificateTable,
 
     unitMeasureTable,
     productsTable,

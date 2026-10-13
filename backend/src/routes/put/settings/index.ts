@@ -533,13 +533,6 @@ async function settings(fastify: FastifyInstance) {
             let values: Record<string, any>;
 
             try {
-                const regime = cleanText(body.tax_regime, 40);
-
-                if (!taxRegimes.includes(regime)) {
-                    throw new Error(
-                        "Selecione um regime tributário válido."
-                    );
-                }
 
                 const bossUserId = Number(body.boss_user_id);
 
@@ -559,78 +552,18 @@ async function settings(fastify: FastifyInstance) {
                     );
                 }
 
-                const cnpj = requiredString(
-                    body,
-                    "cnpj",
-                    "o CNPJ",
-                    24
-                );
-
-                if (normalizeDigits(cnpj).length !== 14) {
-                    throw new Error(
-                        "Informe um CNPJ com 14 dígitos."
-                    );
-                }
-
-                const zipCode = requiredString(
-                    body,
-                    "zip_code",
-                    "o CEP",
-                    12
-                );
-
-                if (normalizeDigits(zipCode).length !== 8) {
-                    throw new Error(
-                        "Informe um CEP com 8 dígitos."
-                    );
-                }
-
-                const state = requiredString(
-                    body,
-                    "state",
-                    "o estado",
-                    2
-                ).toUpperCase();
-
-                if (state.length !== 2) {
-                    throw new Error(
-                        "Informe a sigla do estado com 2 letras."
-                    );
-                }
 
                 values = {
-                    cnpj,
-                    legal_name: requiredString(
-                        body,
-                        "legal_name",
-                        "a razão social"
-                    ),
+                    cnpj: cleanText(body.cnpj,24) || null,
+                    legal_name: cleanText(body.legal_name,180) || null,
                     trade_name: cleanText(body.trade_name, 180) || null,
-                    state_registration: requiredString(
-                        body,
-                        "state_registration",
-                        "a inscrição estadual"
-                    ),
-                    municipal_registration:
-                        cleanText(body.municipal_registration, 80) || null,
-                    tax_regime: regime,
-                    address: requiredString(body, "address", "o endereço"),
-                    number: requiredString(body, "number", "o número", 32),
+                    address: cleanText(body.address, 180) || null,
+                    number: cleanText(body.number, 32) || null,
                     complement: cleanText(body.complement, 180) || null,
-                    neighborhood: requiredString(
-                        body,
-                        "neighborhood",
-                        "o bairro"
-                    ),
-                    city: requiredString(body, "city", "a cidade"),
-                    city_ibge: requiredString(
-                        body,
-                        "city_ibge",
-                        "o código IBGE",
-                        12
-                    ),
-                    state,
-                    zip_code: zipCode,
+                    neighborhood: cleanText(body.neighborhood, 180) || null,
+                    city: cleanText(body.city, 180) || null,
+                    state: cleanText(body.state, 180) || null,
+                    zip_code: cleanText(body.zip_code, 12) || null,
                     boss_user_id: bossUserId
                 };
             } catch (error) {
@@ -662,26 +595,20 @@ async function settings(fastify: FastifyInstance) {
                 transaction(() => {
                     sqlite.prepare(
                         `INSERT INTO company (
-                            id, boss_user_id, cnpj, legal_name, trade_name,
-                            state_registration, municipal_registration,
-                            tax_regime, address, number, complement,
-                            neighborhood, city, city_ibge, state, zip_code
+                            id, boss_user_id, cnpj, legal_name, trade_name,address, number, complement,
+                            neighborhood, city, state, zip_code
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(id) DO UPDATE SET
                             boss_user_id = excluded.boss_user_id,
                             cnpj = excluded.cnpj,
                             legal_name = excluded.legal_name,
                             trade_name = excluded.trade_name,
-                            state_registration = excluded.state_registration,
-                            municipal_registration = excluded.municipal_registration,
-                            tax_regime = excluded.tax_regime,
                             address = excluded.address,
                             number = excluded.number,
                             complement = excluded.complement,
                             neighborhood = excluded.neighborhood,
                             city = excluded.city,
-                            city_ibge = excluded.city_ibge,
                             state = excluded.state,
                             zip_code = excluded.zip_code`
                     ).run(
@@ -690,26 +617,14 @@ async function settings(fastify: FastifyInstance) {
                         values.cnpj,
                         values.legal_name,
                         values.trade_name,
-                        values.state_registration,
-                        values.municipal_registration,
-                        values.tax_regime,
                         values.address,
                         values.number,
                         values.complement,
                         values.neighborhood,
                         values.city,
-                        values.city_ibge,
                         values.state,
                         values.zip_code
                     );
-
-                    const config = getCurrentFiscalConfig(companyId);
-
-                    if (config) {
-                        sqlite.prepare(
-                            "UPDATE fiscal_config SET tax_regime = ? WHERE id = ?"
-                        ).run(values.tax_regime, config.id);
-                    }
                 });
             } catch (error) {
                 request.log.error(error);
