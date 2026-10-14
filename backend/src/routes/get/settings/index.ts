@@ -172,9 +172,12 @@ function getCurrentFiscalConfig(companyId: number) {
 }
 
 function getCurrentRoles() {
-    return sqlite.prepare(
-        "SELECT * FROM roles WHERE name != ? ORDER BY id"
-    ).all("developer") as Record<string, any>[];
+    return sqlite.prepare(`
+        SELECT *
+        FROM roles
+        WHERE name NOT IN ('developer', 'Proprietário')
+        ORDER BY id
+    `).all() as Record<string, any>[];
 }
 
 function getCurrentUnitMeasure() {
@@ -468,7 +471,6 @@ async function settings(fastify: FastifyInstance) {
             const pixKey = getCurrentCompany()?.["pix_key"];
             const roles = getCurrentRoles();
             const unitMeasure = getCurrentUnitMeasure();
-
             return {
                 message: "Configurações do Sistema carregadas.",
                 data: {

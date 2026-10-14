@@ -3,7 +3,6 @@ import type { FastifyInstance } from "fastify";
 const { sqlite } = require("../../../db/index");
 
 async function users(fastify: FastifyInstance) {
-
     fastify.get("/roles",
         {
             onRequest: [
@@ -20,6 +19,7 @@ async function users(fastify: FastifyInstance) {
                         name,
                         level
                     FROM roles
+                    WHERE name NOT IN ('developer', 'Proprietário')
                     ORDER BY level DESC, name ASC
                 `)
                 .all();
