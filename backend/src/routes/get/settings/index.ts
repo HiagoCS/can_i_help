@@ -445,24 +445,10 @@ async function settings(fastify: FastifyInstance) {
         async () => {
             const company = getCurrentCompany();
 
-            const fiscal = company
-                ? getCurrentFiscalConfig(Number(company.id))
-                : undefined;
-
             return {
                 message: "Configurações críticas carregadas.",
                 data: {
                     company: company ?? null,
-                    fiscal: fiscal ?? null,
-                    certificate: company
-                        ? getCertificateMetadata(Number(company.id))
-                        : {
-                            exists: false,
-                            status: false,
-                            valid_from: null,
-                            valid_until: null,
-                            is_valid: false
-                        },
                     users: sqlite.prepare(
                         `SELECT id, email, status
                          FROM users
