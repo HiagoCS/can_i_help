@@ -1,9 +1,9 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ColumnFilter from "@/components/column_filter";
 import {
     adjustProductStock,
+    deleteProductMovement,
     getProductMovements,
     getProducts,
     getProductStock
@@ -38,82 +38,53 @@ function dateLabel(value, time = false) {
     if (!value) return "—";
 
     const date = new Date(String(value).replace(" ", "T"));
-
-    if (Number.isNaN(date.getTime())) return value;
+    if (Number.isNaN(date.getTime())) return String(value);
 
     return new Intl.DateTimeFormat(
         "pt-BR",
         time
             ? {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit"
-            }
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit"
+              }
             : {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric"
-            }
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric"
+              }
     ).format(date);
 }
 
 function typeLabel(item) {
     if (item.movement_type === "sale") return "Venda";
-
-    if (
-        item.movement_type === "stock_add" ||
-        item.movement_type === "create"
-    ) {
+    if (item.movement_type === "stock_add" || item.movement_type === "create") {
         return "Entrada";
     }
-
     if (item.movement_type === "stock_remove") return "Saída";
-
     if (item.movement_type === "deactivate") return "Desativação";
-
     return "Edição";
 }
 
 function typeClass(item) {
     if (item.movement_type === "sale") return "is-sale";
-
-    if (
-        item.movement_type === "stock_add" ||
-        item.movement_type === "create"
-    ) {
+    if (item.movement_type === "stock_add" || item.movement_type === "create") {
         return "is-entry";
     }
-
     if (item.movement_type === "stock_remove") return "is-exit";
-
     return "is-edit";
 }
 
-/*
- * Calcula o percentual de lucro utilizando os valores cadastrados
- * no produto, sem considerar quantidade vendida ou movimentações.
- *
- * Lucro (%) = (valor - custo) / custo * 100
- */
+/* Lucro (%) = (valor de venda - custo) / custo * 100. */
 function productProfit(product) {
-    if (
-        !product ||
-        product.cost == null ||
-        product.value == null
-    ) {
-        return null;
-    }
+    if (!product || product.cost == null || product.value == null) return null;
 
     const cost = Number(product.cost);
     const value = Number(product.value);
 
-    if (
-        !Number.isFinite(cost) ||
-        !Number.isFinite(value) ||
-        cost <= 0
-    ) {
+    if (!Number.isFinite(cost) || !Number.isFinite(value) || cost <= 0) {
         return null;
     }
 
@@ -124,9 +95,7 @@ function exportPdf(product, movements) {
     const popup = window.open("", "_blank");
 
     if (!popup) {
-        window.alert(
-            "Permita a abertura de pop-ups para exportar o PDF."
-        );
+        window.alert("Permita a abertura de pop-ups para exportar o PDF.");
         return;
     }
 
@@ -141,20 +110,14 @@ function exportPdf(product, movements) {
         .reverse()
         .map((item, index) => {
             const sale = item.movement_type === "sale";
-
             const entry =
                 item.movement_type === "stock_add" ||
                 item.movement_type === "create";
-
             const amount = entry
-                ? Number(item.qunt_add)
-                : -Number(item.qunt_remove);
-
-            const unit =
-                Number(sale ? item.movement_value : item.cost) || 0;
-
-            const total =
-                unit * Math.abs(amount) * (sale ? 1 : -1);
+                ? Number(item.qunt_add || 0)
+                : -Number(item.qunt_remove || 0);
+            const unit = Number(sale ? item.movement_value : item.cost) || 0;
+            const total = unit * Math.abs(amount) * (sale ? 1 : -1);
 
             return (
                 "<tr><td>" +
@@ -170,13 +133,9 @@ function exportPdf(product, movements) {
                 " " +
                 esc(item.unit_measure) +
                 "</td><td>" +
-                unit.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2
-                }) +
+                unit.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) +
                 "</td><td>" +
-                total.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2
-                }) +
+                total.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) +
                 "</td><td>" +
                 esc(item.notes) +
                 "</td></tr>"
@@ -186,24 +145,20 @@ function exportPdf(product, movements) {
 
     const quantityTotal = movements.reduce(
         (sum, item) =>
-            sum +
-            Number(item.qunt_add || 0) -
-            Number(item.qunt_remove || 0),
+            sum + Number(item.qunt_add || 0) - Number(item.qunt_remove || 0),
         0
     );
 
     const valueTotal = movements.reduce((sum, item) => {
         const sale = item.movement_type === "sale";
-
         const quantity = sale
             ? Number(item.qunt_remove || 0)
             : Number(item.qunt_add || item.qunt_remove || 0);
 
         return (
             sum +
-            quantity *
-            (Number(sale ? item.movement_value : item.cost) || 0) *
-            (sale ? 1 : -1)
+            quantity * (Number(sale ? item.movement_value : item.cost) || 0) *
+                (sale ? 1 : -1)
         );
     }, 0);
 
@@ -221,9 +176,9 @@ function exportPdf(product, movements) {
         "footer{margin-top:6mm;color:#637282;font-size:8pt}" +
         "</style></head><body><h1>Movimentações do produto</h1>" +
         "<div class=\"meta\"><strong>" +
-        esc(product.name) +
+        esc(product?.name) +
         "</strong><br>Unidade: " +
-        esc(product.unit_measure || "UN") +
+        esc(product?.unit_measure || "UN") +
         " · Período: Todos os períodos<br>Gerado em: " +
         esc(dateLabel(new Date().toISOString(), true)) +
         " · Registros listados: " +
@@ -233,11 +188,9 @@ function exportPdf(product, movements) {
         "<tr class=\"total\"><td colspan=\"4\">TOTAL LÍQUIDO</td><td>" +
         quantityTotal +
         " " +
-        esc(product.unit_measure || "UN") +
+        esc(product?.unit_measure || "UN") +
         "</td><td>—</td><td>" +
-        valueTotal.toLocaleString("pt-BR", {
-            minimumFractionDigits: 2
-        }) +
+        valueTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) +
         "</td><td>—</td></tr></tbody></table>" +
         "<footer>Entradas e saídas são calculadas pelo custo; vendas pelo valor praticado.</footer>" +
         "<script>window.addEventListener(\"load\",()=>setTimeout(()=>window.print(),200));</script>" +
@@ -251,31 +204,24 @@ function exportPdf(product, movements) {
 export default function ProductStockPage() {
     const { productId } = useParams();
     const navigate = useNavigate();
-
     const historyView = Boolean(productId);
 
     const [products, setProducts] = useState([]);
     const [availableProducts, setAvailableProducts] = useState([]);
-
     const [selectedId, setSelectedId] = useState(
         productId ? Number(productId) : null
     );
-
     const [movements, setMovements] = useState([]);
     const [movementId, setMovementId] = useState(null);
-
     const [summaryPage, setSummaryPage] = useState(0);
-
     const [columnVisibility, setColumnVisibility] = useState(
         initialStockColumnVisibility
     );
-
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deletingMovement, setDeletingMovement] = useState(false);
     const [error, setError] = useState("");
-
     const [direction, setDirection] = useState("");
-
     const [draft, setDraft] = useState({
         productId: "",
         quantity: "1",
@@ -288,17 +234,10 @@ export default function ProductStockPage() {
         Promise.all([getProductStock(), getProducts()])
             .then(([stock, all]) => {
                 if (!active) return;
-
                 setProducts(stock);
+                setAvailableProducts(all.filter((item) => item.status));
 
-                setAvailableProducts(
-                    all.filter((item) => item.status)
-                );
-
-                const id = productId
-                    ? Number(productId)
-                    : stock[0]?.id;
-
+                const id = productId ? Number(productId) : stock[0]?.id;
                 if (id) setSelectedId(id);
             })
             .catch((reason) => {
@@ -320,20 +259,17 @@ export default function ProductStockPage() {
     }, [productId]);
 
     const activeId = productId ? Number(productId) : selectedId;
-
     const selectedProduct =
-        products.find((item) => item.id === activeId) || null;
+        products.find((item) => Number(item.id) === Number(activeId)) || null;
 
     const summaryPageCount = Math.max(
         1,
         Math.ceil(products.length / stockPageSize)
     );
-
     const summaryProducts = products.slice(
         summaryPage * stockPageSize,
         (summaryPage + 1) * stockPageSize
     );
-
     const visibleStockColumns = stockColumns.filter(
         (column) => columnVisibility[column.key]
     );
@@ -352,13 +288,11 @@ export default function ProductStockPage() {
         }
 
         const controller = new AbortController();
-
-        getProductMovements(activeId, controller.signal)
+        getProductMovements(Number(activeId), controller.signal)
             .then((rows) => {
                 setMovements(rows);
-
                 setMovementId((current) =>
-                    rows.some((item) => item.id === current)
+                    rows.some((item) => Number(item.id) === Number(current))
                         ? current
                         : rows[0]?.id ?? null
                 );
@@ -377,10 +311,9 @@ export default function ProductStockPage() {
     }, [activeId]);
 
     const selectedMovement =
-        movements.find((item) => item.id === movementId) ||
+        movements.find((item) => Number(item.id) === Number(movementId)) ||
         movements[0] ||
         null;
-
     const display = selectedMovement || selectedProduct;
 
     function toggleStockColumn(key) {
@@ -391,19 +324,17 @@ export default function ProductStockPage() {
     }
 
     function selectSummaryProduct(item) {
-        if (selectedId === item.id) {
+        if (Number(selectedId) === Number(item.id)) {
             setSelectedId(null);
             setMovementId(null);
             return;
         }
-
         setSelectedId(item.id);
         setMovementId(null);
     }
 
     function clearSummarySelection(event) {
         if (historyView || !selectedId || direction) return;
-
         const target = event.target;
 
         if (
@@ -418,46 +349,28 @@ export default function ProductStockPage() {
         setMovementId(null);
     }
 
-    /*
-     * Resumo das vendas realizadas.
-     * Esses valores são independentes do percentual de lucro.
-     */
     const sales = movements.reduce(
         (sum, item) =>
             item.movement_type === "sale"
                 ? {
-                    quantity:
-                        sum.quantity +
-                        Number(item.qunt_remove || 0),
-                    value:
-                        sum.value +
-                        Number(
-                            item.movement_value ?? item.value ?? 0
-                        ) *
-                        Number(item.qunt_remove || 0)
-                }
+                      quantity: sum.quantity + Number(item.qunt_remove || 0),
+                      value:
+                          sum.value +
+                          Number(item.movement_value ?? item.value ?? 0) *
+                              Number(item.qunt_remove || 0)
+                  }
                 : sum,
-        {
-            quantity: 0,
-            value: 0
-        }
+        { quantity: 0, value: 0 }
     );
 
-    /*
-     * Percentual de lucro baseado nos dados cadastrados do produto.
-     * Não utiliza a movimentação selecionada nem as vendas realizadas.
-     */
     const selectedProfit = productProfit(selectedProduct);
 
     function openModal(action) {
         setDraft({
-            productId: String(
-                selectedProduct?.id ?? activeId ?? ""
-            ),
+            productId: String(selectedProduct?.id ?? activeId ?? ""),
             quantity: "1",
             notes: ""
         });
-
         setDirection(action);
         setError("");
     }
@@ -465,25 +378,23 @@ export default function ProductStockPage() {
     async function refresh(id) {
         const [stock, rows] = await Promise.all([
             getProductStock(),
-            getProductMovements(id)
+            getProductMovements(Number(id))
         ]);
-
         setProducts(stock);
         setMovements(rows);
-        setSelectedId(id);
+        setSelectedId(Number(id));
         setMovementId(rows[0]?.id ?? null);
     }
 
     async function saveMovement(event) {
         event.preventDefault();
-
         if (saving) return;
 
         const id = Number(draft.productId);
         const amount = Number(draft.quantity);
 
         if (
-            !Number.isInteger(id) ||
+            !Number.isSafeInteger(id) ||
             id <= 0 ||
             !Number.isInteger(amount) ||
             amount <= 0
@@ -496,7 +407,6 @@ export default function ProductStockPage() {
 
         setSaving(true);
         setError("");
-
         try {
             await adjustProductStock(
                 id,
@@ -504,9 +414,7 @@ export default function ProductStockPage() {
                 amount,
                 draft.notes.trim()
             );
-
             await refresh(id);
-
             setDirection("");
         } catch (reason) {
             setError(
@@ -519,17 +427,42 @@ export default function ProductStockPage() {
         }
     }
 
-    const title = historyView
-        ? "Estoque - Detalhes"
-        : "Produtos - Estoque";
+    async function removeSelectedMovement() {
+        if (!selectedMovement || deletingMovement) return;
+
+        const confirmed = window.confirm(
+            `Deseja excluir a movimentação #${selectedMovement.id} (${typeLabel(selectedMovement)})? O estoque será ajustado conforme o tipo dessa movimentação.`
+        );
+        if (!confirmed) return;
+
+        setDeletingMovement(true);
+        setError("");
+        try {
+            await deleteProductMovement(Number(selectedMovement.id));
+            const [stock, rows] = await Promise.all([
+                getProductStock(),
+                getProductMovements(Number(activeId))
+            ]);
+            setProducts(stock);
+            setMovements(rows);
+            setMovementId(rows[0]?.id ?? null);
+        } catch (reason) {
+            setError(
+                reason instanceof Error
+                    ? reason.message
+                    : "Não foi possível excluir a movimentação."
+            );
+        } finally {
+            setDeletingMovement(false);
+        }
+    }
+
+    const title = historyView ? "Estoque - Detalhes" : "Produtos - Estoque";
 
     return (
-        <main
-            className="product-stock"
-            onMouseDown={clearSummarySelection}
-        >
+        <main className="product-stock" onMouseDown={clearSummarySelection}>
             <header className="product-stock__header">
-                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
+                <h1 onClick={() => (window.location.href = "/")}>POSSO AJUDAR?</h1>
                 <span>{title}</span>
             </header>
 
@@ -549,21 +482,15 @@ export default function ProductStockPage() {
                                         selectedMovement?.name ||
                                         "Produto"}
                                 </h2>
-
                                 <span>
-                                    Unidade:{" "}
-                                    {selectedProduct?.unit_measure ||
-                                        selectedMovement?.unit_measure ||
-                                        "UN"}
+                                    Unidade: {selectedProduct?.unit_measure ||
+                                        selectedMovement?.unit_measure || "UN"}
                                 </span>
                             </div>
-
                             <button
                                 className="product-stock__button product-stock__button--neutral"
                                 type="button"
-                                onClick={() =>
-                                    navigate("/produtos/estoque")
-                                }
+                                onClick={() => navigate("/produtos/estoque")}
                             >
                                 Voltar ao estoque
                             </button>
@@ -583,128 +510,66 @@ export default function ProductStockPage() {
                                         <th>Observações</th>
                                     </tr>
                                 </thead>
-
                                 <tbody>
                                     {loading ? (
                                         <tr>
-                                            <td
-                                                colSpan="8"
-                                                className="product-stock__empty"
-                                            >
+                                            <td colSpan="8" className="product-stock__empty">
                                                 Carregando...
                                             </td>
                                         </tr>
                                     ) : movements.length === 0 ? (
                                         <tr>
-                                            <td
-                                                colSpan="8"
-                                                className="product-stock__empty"
-                                            >
-                                                Este produto ainda não possui
-                                                movimentações.
+                                            <td colSpan="8" className="product-stock__empty">
+                                                Este produto ainda não possui movimentações.
                                             </td>
                                         </tr>
                                     ) : (
                                         movements.map((item, index) => {
                                             const entry =
-                                                item.movement_type ===
-                                                "create" ||
-                                                item.movement_type ===
-                                                "stock_add";
-
-                                            const sale =
-                                                item.movement_type === "sale";
-
+                                                item.movement_type === "create" ||
+                                                item.movement_type === "stock_add";
+                                            const sale = item.movement_type === "sale";
                                             const amount = entry
-                                                ? Number(item.qunt_add)
-                                                : -Number(item.qunt_remove);
-
+                                                ? Number(item.qunt_add || 0)
+                                                : -Number(item.qunt_remove || 0);
                                             const unit =
-                                                Number(
-                                                    sale
-                                                        ? item.movement_value
-                                                        : item.cost
-                                                ) || 0;
-
+                                                Number(sale ? item.movement_value : item.cost) || 0;
                                             const total =
-                                                unit *
-                                                Math.abs(amount) *
-                                                (sale ? 1 : -1);
+                                                unit * Math.abs(amount) * (sale ? 1 : -1);
+                                            const selected =
+                                                Number(item.id) === Number(selectedMovement?.id);
 
                                             return (
                                                 <tr
                                                     key={item.id}
                                                     tabIndex="0"
-                                                    aria-selected={
-                                                        item.id ===
-                                                        selectedMovement?.id
-                                                    }
+                                                    aria-selected={selected}
                                                     className={
                                                         "product-stock__movement-row " +
                                                         typeClass(item) +
-                                                        (item.id ===
-                                                            selectedMovement?.id
-                                                            ? " is-selected"
-                                                            : "")
+                                                        (selected ? " is-selected" : "")
                                                     }
-                                                    onClick={() =>
-                                                        setMovementId(item.id)
-                                                    }
+                                                    onClick={() => setMovementId(item.id)}
                                                     onKeyDown={(event) => {
-                                                        if (
-                                                            event.key ===
-                                                            "Enter" ||
-                                                            event.key === " "
-                                                        ) {
+                                                        if (event.key === "Enter" || event.key === " ") {
                                                             event.preventDefault();
-                                                            setMovementId(
-                                                                item.id
-                                                            );
+                                                            setMovementId(item.id);
                                                         }
                                                     }}
                                                 >
-                                                    <td>
-                                                        {movements.length -
-                                                            index}
-                                                    </td>
-
-                                                    <td>
-                                                        {dateLabel(
-                                                            item.dt_update,
-                                                            true
-                                                        )}
-                                                    </td>
-
+                                                    <td>{movements.length - index}</td>
+                                                    <td>{dateLabel(item.dt_update, true)}</td>
                                                     <td>{typeLabel(item)}</td>
-
-                                                    <td>
-                                                        {item.reference_id ??
-                                                            "—"}
-                                                    </td>
-
+                                                    <td>{item.reference_id ?? "—"}</td>
                                                     <td>
                                                         {amount > 0 ? "+" : ""}
-                                                        {qty(
-                                                            amount,
-                                                            item.unit_measure
-                                                        )}
+                                                        {qty(amount, item.unit_measure)}
                                                     </td>
-
                                                     <td>{money(unit)}</td>
-
-                                                    <td
-                                                        className={
-                                                            total >= 0
-                                                                ? "is-positive"
-                                                                : "is-negative"
-                                                        }
-                                                    >
+                                                    <td className={total >= 0 ? "is-positive" : "is-negative"}>
                                                         {money(total)}
                                                     </td>
-
-                                                    <td>
-                                                        {item.notes || "—"}
-                                                    </td>
+                                                    <td>{item.notes || "—"}</td>
                                                 </tr>
                                             );
                                         })
@@ -712,68 +577,34 @@ export default function ProductStockPage() {
 
                                     {movements.length > 0 && (
                                         <tr className="product-stock__ledger-total">
-                                            <td colSpan="4">
-                                                TOTAL LÍQUIDO
-                                            </td>
-
+                                            <td colSpan="4">TOTAL LÍQUIDO</td>
                                             <td>
                                                 {qty(
                                                     movements.reduce(
                                                         (sum, item) =>
                                                             sum +
-                                                            Number(
-                                                                item.qunt_add ||
-                                                                0
-                                                            ) -
-                                                            Number(
-                                                                item.qunt_remove ||
-                                                                0
-                                                            ),
+                                                            Number(item.qunt_add || 0) -
+                                                            Number(item.qunt_remove || 0),
                                                         0
                                                     ),
                                                     selectedProduct?.unit_measure
                                                 )}
                                             </td>
-
                                             <td>—</td>
-
                                             <td>
                                                 {money(
-                                                    movements.reduce(
-                                                        (sum, item) => {
-                                                            const sale =
-                                                                item.movement_type ===
-                                                                "sale";
-
-                                                            const amount = sale
-                                                                ? Number(
-                                                                    item.qunt_remove ||
-                                                                    0
-                                                                )
-                                                                : Number(
-                                                                    item.qunt_add ||
-                                                                    item.qunt_remove ||
-                                                                    0
-                                                                );
-
-                                                            return (
-                                                                sum +
-                                                                amount *
-                                                                (Number(
-                                                                    sale
-                                                                        ? item.movement_value
-                                                                        : item.cost
-                                                                ) || 0) *
-                                                                (sale
-                                                                    ? 1
-                                                                    : -1)
-                                                            );
-                                                        },
-                                                        0
-                                                    )
+                                                    movements.reduce((sum, item) => {
+                                                        const sale = item.movement_type === "sale";
+                                                        const amount = sale
+                                                            ? Number(item.qunt_remove || 0)
+                                                            : Number(item.qunt_add || item.qunt_remove || 0);
+                                                        const unit = Number(
+                                                            sale ? item.movement_value : item.cost
+                                                        ) || 0;
+                                                        return sum + amount * unit * (sale ? 1 : -1);
+                                                    }, 0)
                                                 )}
                                             </td>
-
                                             <td>—</td>
                                         </tr>
                                     )}
@@ -784,10 +615,7 @@ export default function ProductStockPage() {
                 ) : (
                     <section className="product-stock__summary-panel">
                         <div className="product-stock__summary-heading">
-                            <strong>
-                                Últimas movimentações por produto
-                            </strong>
-
+                            <strong>Últimas movimentações por produto</strong>
                             <ColumnFilter
                                 options={stockColumns}
                                 visibility={columnVisibility}
@@ -800,233 +628,115 @@ export default function ProductStockPage() {
                                 <thead>
                                     <tr>
                                         <th>#</th>
-
-                                        {visibleStockColumns.map((column) => (
-                                            <th style={{
-                                                background:
-                                                (column.label==="Última entrada"?"#1478ed":
-                                                (column.label==="Última venda"?"#16843b":
-                                                (column.label==="Última saída"?"#e44558":"")))
-                                                ,color:(column.label==="Última entrada"?"#fff":
-                                                (column.label==="Última venda"?"#fff":
-                                                (column.label==="Última saída"?"#fff":"")))}} key={column.key}>
-                                                {column.label}
-                                            </th>
-                                        ))}
+                                        {visibleStockColumns.map((column) => {
+                                            const highlight = {
+                                                entry: "#1478ed",
+                                                sale: "#16843b",
+                                                exit: "#e44558"
+                                            }[column.key];
+                                            return (
+                                                <th
+                                                    key={column.key}
+                                                    style={highlight ? { background: highlight, color: "#fff" } : undefined}
+                                                >
+                                                    {column.label}
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                 </thead>
-
                                 <tbody>
                                     {loading ? (
                                         <tr>
-                                            <td
-                                                colSpan={
-                                                    visibleStockColumns.length +
-                                                    1
-                                                }
-                                                className="product-stock__empty"
-                                            >
+                                            <td colSpan={visibleStockColumns.length + 1} className="product-stock__empty">
                                                 Carregando estoque...
                                             </td>
                                         </tr>
                                     ) : products.length === 0 ? (
                                         <tr>
-                                            <td
-                                                colSpan={
-                                                    visibleStockColumns.length +
-                                                    1
-                                                }
-                                                className="product-stock__empty"
-                                            >
-                                                Ainda não há movimentações de
-                                                estoque.
+                                            <td colSpan={visibleStockColumns.length + 1} className="product-stock__empty">
+                                                Ainda não há movimentações de estoque.
                                             </td>
                                         </tr>
                                     ) : (
-                                        summaryProducts.map(
-                                            (item, index) => (
-                                                <tr
-                                                    key={item.id}
-                                                    tabIndex="0"
-                                                    aria-selected={
-                                                        item.id === activeId
+                                        summaryProducts.map((item, index) => (
+                                            <tr
+                                                key={item.id}
+                                                tabIndex="0"
+                                                aria-selected={Number(item.id) === Number(activeId)}
+                                                className={
+                                                    "product-stock__product-row" +
+                                                    (Number(item.id) === Number(activeId) ? " is-selected" : "")
+                                                }
+                                                onClick={() => selectSummaryProduct(item)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === "Enter" || event.key === " ") {
+                                                        event.preventDefault();
+                                                        selectSummaryProduct(item);
                                                     }
-                                                    className={
-                                                        "product-stock__product-row" +
-                                                        (item.id === activeId
-                                                            ? " is-selected"
-                                                            : "")
-                                                    }
-                                                    onClick={() =>
-                                                        selectSummaryProduct(
-                                                            item
-                                                        )
-                                                    }
-                                                    onKeyDown={(event) => {
-                                                        if (
-                                                            event.key ===
-                                                            "Enter" ||
-                                                            event.key === " "
-                                                        ) {
-                                                            event.preventDefault();
-                                                            selectSummaryProduct(
-                                                                item
-                                                            );
-                                                        }
-                                                    }}
-                                                >
+                                                }}
+                                            >
+                                                <td>{summaryPage * stockPageSize + index + 1}</td>
+                                                {columnVisibility.name && <td title={item.name}>{item.name}</td>}
+                                                {columnVisibility.value && <td className="is-positive">{money(item.value)}</td>}
+                                                {columnVisibility.amount && (
+                                                    <td className="is-quantity">{qty(item.amount, item.unit_measure)}</td>
+                                                )}
+                                                {columnVisibility.entry && (
                                                     <td>
-                                                        {summaryPage *
-                                                            stockPageSize +
-                                                            index +
-                                                            1}
+                                                        {item.latest_entry ? (
+                                                            <span className="is-entry">
+                                                                +{item.latest_entry.qunt_add} {item.unit_measure} · {dateLabel(item.latest_entry.dt_update)}
+                                                            </span>
+                                                        ) : "—"}
                                                     </td>
-
-                                                    {columnVisibility.name && (
-                                                        <td title={item.name}>
-                                                            {item.name}
-                                                        </td>
-                                                    )}
-
-                                                    {columnVisibility.value && (
-                                                        <td className="is-positive">
-                                                            {money(item.value)}
-                                                        </td>
-                                                    )}
-
-                                                    {columnVisibility.amount && (
-                                                        <td className="is-quantity">
-                                                            {qty(
-                                                                item.amount,
-                                                                item.unit_measure
-                                                            )}
-                                                        </td>
-                                                    )}
-
-                                                    {columnVisibility.entry && (
-                                                        <td>
-                                                            {item.latest_entry ? (
-                                                                <span className="is-entry">
-                                                                    +
-                                                                    {
-                                                                        item
-                                                                            .latest_entry
-                                                                            .qunt_add
-                                                                    }{" "}
-                                                                    {
-                                                                        item.unit_measure
-                                                                    }{" "}
-                                                                    ·{" "}
-                                                                    {dateLabel(
-                                                                        item
-                                                                            .latest_entry
-                                                                            .dt_update
-                                                                    )}
-                                                                </span>
-                                                            ) : (
-                                                                "—"
-                                                            )}
-                                                        </td>
-                                                    )}
-
-                                                    {columnVisibility.sale && (
-                                                        <td>
-                                                            {item.latest_sale ? (
-                                                                <span className="is-sale">
-                                                                    −
-                                                                    {
-                                                                        item
-                                                                            .latest_sale
-                                                                            .qunt_remove
-                                                                    }{" "}
-                                                                    {
-                                                                        item.unit_measure
-                                                                    }{" "}
-                                                                    ·{" "}
-                                                                    {dateLabel(
-                                                                        item
-                                                                            .latest_sale
-                                                                            .dt_update
-                                                                    )}
-                                                                </span>
-                                                            ) : (
-                                                                "—"
-                                                            )}
-                                                        </td>
-                                                    )}
-
-                                                    {columnVisibility.exit && (
-                                                        <td>
-                                                            {item.latest_exit ? (
-                                                                <span className="is-exit">
-                                                                    −
-                                                                    {
-                                                                        item
-                                                                            .latest_exit
-                                                                            .qunt_remove
-                                                                    }{" "}
-                                                                    {
-                                                                        item.unit_measure
-                                                                    }{" "}
-                                                                    ·{" "}
-                                                                    {dateLabel(
-                                                                        item
-                                                                            .latest_exit
-                                                                            .dt_update
-                                                                    )}
-                                                                </span>
-                                                            ) : (
-                                                                "—"
-                                                            )}
-                                                        </td>
-                                                    )}
-                                                </tr>
-                                            )
-                                        )
+                                                )}
+                                                {columnVisibility.sale && (
+                                                    <td>
+                                                        {item.latest_sale ? (
+                                                            <span className="is-sale">
+                                                                −{item.latest_sale.qunt_remove} {item.unit_measure} · {dateLabel(item.latest_sale.dt_update)}
+                                                            </span>
+                                                        ) : "—"}
+                                                    </td>
+                                                )}
+                                                {columnVisibility.exit && (
+                                                    <td>
+                                                        {item.latest_exit ? (
+                                                            <span className="is-exit">
+                                                                −{item.latest_exit.qunt_remove} {item.unit_measure} · {dateLabel(item.latest_exit.dt_update)}
+                                                            </span>
+                                                        ) : "—"}
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))
                                     )}
                                 </tbody>
                             </table>
                         </div>
 
-                        <div
-                            className="product-stock__pagination"
-                            aria-label="Paginação do estoque"
-                        >
+                        <div className="product-stock__pagination" aria-label="Paginação do estoque">
                             <span>
                                 {products.length
                                     ? `Página ${summaryPage + 1} de ${summaryPageCount} · ${products.length} produtos`
                                     : "0 produtos"}
                             </span>
-
                             <div>
                                 <button
                                     type="button"
                                     aria-label="Página anterior"
                                     disabled={summaryPage === 0 || loading}
-                                    onClick={() =>
-                                        setSummaryPage((page) =>
-                                            Math.max(0, page - 1)
-                                        )
-                                    }
+                                    onClick={() => setSummaryPage((page) => Math.max(0, page - 1))}
                                 >
                                     &lt;
                                 </button>
-
                                 <button
                                     type="button"
                                     aria-label="Próxima página"
-                                    disabled={
-                                        summaryPage >=
-                                        summaryPageCount - 1 ||
-                                        loading
-                                    }
+                                    disabled={summaryPage >= summaryPageCount - 1 || loading}
                                     onClick={() =>
-                                        setSummaryPage((page) =>
-                                            Math.min(
-                                                summaryPageCount - 1,
-                                                page + 1
-                                            )
-                                        )
+                                        setSummaryPage((page) => Math.min(summaryPageCount - 1, page + 1))
                                     }
                                 >
                                     &gt;
@@ -1042,63 +752,33 @@ export default function ProductStockPage() {
                             <>
                                 <div className="product-stock__card-title">
                                     <strong>{display.name}</strong>
-                                    <span>
-                                        #{display.product_id ?? display.id}
-                                    </span>
+                                    <span>#{display.product_id ?? display.id}</span>
                                 </div>
-
                                 <div className="product-stock__numbers">
                                     <span className="is-cost">
-                                        {display.cost == null
-                                            ? "—"
-                                            : money(display.cost)}
+                                        {display.cost == null ? "—" : money(display.cost)}
                                     </span>
-
                                     <b>−</b>
-
-                                    <span className="is-value">
-                                        {money(display.value)}
-                                    </span>
-
+                                    <span className="is-value">{money(display.value)}</span>
                                     <b>−</b>
-
                                     <span className="is-quantity">
-                                        {qty(
-                                            selectedProduct?.amount ??
-                                            display.amount,
-                                            display.unit_measure
-                                        )}
+                                        {qty(selectedProduct?.amount ?? display.amount, display.unit_measure)}
                                     </span>
                                 </div>
-
                                 <div className="product-stock__sales-total">
                                     <strong>Total de vendas:</strong>
-
-                                    <span>
-                                        {qty(
-                                            sales.quantity,
-                                            display.unit_measure
-                                        )}
-                                    </span>
-
+                                    <span>{qty(sales.quantity, display.unit_measure)}</span>
                                     <b>×</b>
-
-                                    <span className="is-value">
-                                        {money(sales.value)}
-                                    </span>
+                                    <span className="is-value">{money(sales.value)}</span>
                                 </div>
                             </>
                         ) : (
                             <div className="product-stock__empty-card">
                                 <strong>Nenhum produto selecionado</strong>
-                                <span>
-                                    Escolha um produto na tabela.
-                                </span>
+                                <span>Escolha um produto na tabela.</span>
                             </div>
                         )}
                     </section>
-
-                    {/* CARD DE PERCENTUAL DE LUCRO */}
 
                     {selectedProduct ? (
                         <section className="product-stock__card product-stock__calculation">
@@ -1106,128 +786,93 @@ export default function ProductStockPage() {
                                 <strong>Percentual de Lucro</strong>
                                 <span>{selectedProduct.name}</span>
                             </div>
-
                             {selectedProfit !== null ? (
                                 <>
                                     <div className="product-stock__equation">
-                                        <span className="is-value">
-                                            {money(selectedProduct.value)}
-                                        </span>
-
+                                        <span className="is-value">{money(selectedProduct.value)}</span>
                                         <b>−</b>
-
-                                        <span className="is-cost">
-                                            {money(selectedProduct.cost)}
-                                        </span>
-
+                                        <span className="is-cost">{money(selectedProduct.cost)}</span>
                                         <b>=</b>
-
-                                        <strong
-                                            className={
-                                                selectedProfit >= 0 ? "is-gain" : "is-loss"
-                                            }
-                                        >
-                                            {money(
-                                                Number(selectedProduct.value) -
-                                                Number(selectedProduct.cost)
-                                            )}
+                                        <strong className={selectedProfit >= 0 ? "is-gain" : "is-loss"}>
+                                            {money(Number(selectedProduct.value) - Number(selectedProduct.cost))}
                                         </strong>
                                     </div>
-
                                     <div className="product-stock__equation">
-                                        <strong
-                                            className={
-                                                selectedProfit >= 0 ? "is-gain" : "is-loss"
-                                            }
-                                        >
-                                            {money(
-                                                Number(selectedProduct.value) -
-                                                Number(selectedProduct.cost)
-                                            )}
+                                        <strong className={selectedProfit >= 0 ? "is-gain" : "is-loss"}>
+                                            {money(Number(selectedProduct.value) - Number(selectedProduct.cost))}
                                         </strong>
-
                                         <b>÷</b>
-
-                                        <span className="is-cost">
-                                            {money(selectedProduct.cost)}
-                                        </span>
-
+                                        <span className="is-cost">{money(selectedProduct.cost)}</span>
                                         <b>=</b>
-
-                                        <strong
-                                            className={
-                                                selectedProfit >= 0 ? "is-gain" : "is-loss"
-                                            }
-                                        >
+                                        <strong className={selectedProfit >= 0 ? "is-gain" : "is-loss"}>
                                             {selectedProfit.toLocaleString("pt-BR", {
                                                 minimumFractionDigits: 2,
                                                 maximumFractionDigits: 2
-                                            })}
-                                            %
+                                            })}%
                                         </strong>
                                     </div>
                                 </>
                             ) : (
                                 <p className="product-stock__hint">
-                                    Não é possível calcular o percentual de lucro.
-                                    Verifique se o custo e o valor de venda estão
-                                    cadastrados e se o custo é maior que zero.
+                                    Não é possível calcular o percentual de lucro. Verifique se o custo e o valor de venda estão cadastrados e se o custo é maior que zero.
                                 </p>
                             )}
                         </section>
-                    ):<section className="product-stock__card product-stock__calculation"></section>}
+                    ) : (
+                        <section className="product-stock__card product-stock__calculation" />
+                    )}
 
-                    <section
-                        className="product-stock__card product-stock__actions"
-                        aria-label="Ações de estoque"
-                    >
+                    <section className="product-stock__card product-stock__actions" aria-label="Ações de estoque">
                         {historyView ? (
                             <>
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--neutral"
-                                    onClick={() =>
-                                        navigate("/produtos/estoque")
-                                    }
+                                    onClick={() => navigate("/produtos/estoque")}
                                     aria-label="Voltar ao estoque"
+                                    title="Voltar ao estoque"
                                 >
                                     ←
                                 </button>
-
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--blue"
+                                    disabled={!movements.length || !selectedMovement || deletingMovement}
                                     onClick={() => {
                                         const index = movements.findIndex(
-                                            (item) =>
-                                                item.id ===
-                                                selectedMovement?.id
+                                            (item) => Number(item.id) === Number(selectedMovement?.id)
                                         );
-
-                                        if (index > 0) {
-                                            setMovementId(
-                                                movements[index - 1].id
-                                            );
-                                        }
+                                        if (index > 0) setMovementId(movements[index - 1].id);
                                     }}
                                     aria-label="Movimentação anterior"
+                                    title="Movimentação anterior"
                                 >
                                     ↑
                                 </button>
-
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--green"
-                                    disabled={!movements.length}
-                                    onClick={() =>
-                                        exportPdf(
-                                            selectedProduct || display,
-                                            movements
-                                        )
-                                    }
+                                    disabled={!movements.length || deletingMovement}
+                                    onClick={() => exportPdf(selectedProduct || display, movements)}
                                     aria-label="Exportar PDF"
+                                    title="Exportar PDF"
                                 >
                                     PDF
+                                </button>
+                                <button
+                                    type="button"
+                                    className="product-stock__action product-stock__action--danger"
+                                    style={{ backgroundColor: "#d9363e", color: "#fff", borderColor: "#d9363e" }}
+                                    disabled={!selectedMovement || deletingMovement}
+                                    onClick={removeSelectedMovement}
+                                    aria-label="Excluir movimentação selecionada"
+                                    title={
+                                        deletingMovement
+                                            ? "Excluindo movimentação..."
+                                            : "Excluir movimentação selecionada"
+                                    }
+                                >
+                                    {deletingMovement ? "…" : "🗑"}
                                 </button>
                             </>
                         ) : selectedProduct ? (
@@ -1237,63 +882,43 @@ export default function ProductStockPage() {
                                     className="product-stock__action product-stock__action--blue"
                                     onClick={() => openModal("add")}
                                     aria-label="Adicionar nova entrada"
+                                    title="Adicionar entrada"
                                 >
                                     ＋
                                 </button>
-
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--blue"
                                     onClick={() => openModal("remove")}
                                     aria-label="Adicionar nova saída"
+                                    title="Adicionar saída"
                                 >
                                     −
                                 </button>
-
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--neutral"
-                                    onClick={() =>
-                                        navigate(
-                                            "/produtos/estoque/" +
-                                            selectedProduct.id
-                                        )
-                                    }
+                                    onClick={() => navigate("/produtos/estoque/" + selectedProduct.id)}
                                     aria-label="Listar movimentações do produto"
+                                    title="Listar movimentações do produto"
                                 >
                                     ▤
                                 </button>
-
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--blue"
                                     disabled={!movements.length}
-                                    onClick={() =>
-                                        exportPdf(
-                                            selectedProduct,
-                                            movements
-                                        )
-                                    }
+                                    onClick={() => exportPdf(selectedProduct, movements)}
                                     aria-label="Exportar PDF"
+                                    title="Exportar PDF"
                                 >
                                     PDF
                                 </button>
                             </>
                         ) : (
                             <>
-                                <button
-                                    className="product-overview__action product-overview__action--add"
-                                    type="button"
-                                    disabled={true}
-                                >
-                                </button>
-
-                                <button
-                                    className="product-overview__action product-overview__action--add"
-                                    type="button"
-                                    disabled={true}
-                                ></button>
-
+                                <button className="product-overview__action product-overview__action--add" type="button" disabled aria-label="Adicionar entrada" />
+                                <button className="product-overview__action product-overview__action--add" type="button" disabled aria-label="Adicionar saída" />
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--neutral"
@@ -1302,7 +927,6 @@ export default function ProductStockPage() {
                                 >
                                     ▤
                                 </button>
-
                                 <button
                                     type="button"
                                     className="product-stock__action product-stock__action--blue"
@@ -1321,10 +945,7 @@ export default function ProductStockPage() {
                 <div
                     className="product-stock__backdrop"
                     onMouseDown={(event) => {
-                        if (
-                            event.target === event.currentTarget &&
-                            !saving
-                        ) {
+                        if (event.target === event.currentTarget && !saving) {
                             setDirection("");
                         }
                     }}
@@ -1340,20 +961,17 @@ export default function ProductStockPage() {
                             className="product-stock__modal-close"
                             type="button"
                             aria-label="Fechar"
+                            disabled={saving}
                             onClick={() => setDirection("")}
                         >
                             ×
                         </button>
-
                         <h2 id="stock-modal-title">
-                            {direction === "add"
-                                ? "Nova entrada"
-                                : "Nova saída"}
+                            {direction === "add" ? "Nova entrada" : "Nova saída"}
                         </h2>
 
                         <label>
                             <span>Produto</span>
-
                             <select
                                 required
                                 value={draft.productId}
@@ -1364,14 +982,10 @@ export default function ProductStockPage() {
                                     }))
                                 }
                             >
-                                <option value="">
-                                    Selecione um produto
-                                </option>
-
+                                <option value="">Selecione um produto</option>
                                 {availableProducts.map((item) => (
                                     <option value={item.id} key={item.id}>
-                                        {item.name} · {item.amount}{" "}
-                                        {item.unit_measure}
+                                        {item.name} · {item.amount} {item.unit_measure}
                                     </option>
                                 ))}
                             </select>
@@ -1379,7 +993,6 @@ export default function ProductStockPage() {
 
                         <label>
                             <span>Quantidade</span>
-
                             <input
                                 required
                                 type="number"
@@ -1397,7 +1010,6 @@ export default function ProductStockPage() {
 
                         <label>
                             <span>Observações</span>
-
                             <textarea
                                 maxLength={300}
                                 value={draft.notes}
@@ -1410,14 +1022,7 @@ export default function ProductStockPage() {
                             />
                         </label>
 
-                        {error && (
-                            <p
-                                className="product-stock__error"
-                                role="alert"
-                            >
-                                {error}
-                            </p>
-                        )}
+                        {error && <p className="product-stock__error" role="alert">{error}</p>}
 
                         <div className="product-stock__modal-actions">
                             <button
@@ -1428,7 +1033,6 @@ export default function ProductStockPage() {
                             >
                                 Cancelar
                             </button>
-
                             <button
                                 type="submit"
                                 className="product-stock__button product-stock__button--blue"
@@ -1437,8 +1041,8 @@ export default function ProductStockPage() {
                                 {saving
                                     ? "Salvando..."
                                     : direction === "add"
-                                        ? "Registrar entrada"
-                                        : "Registrar saída"}
+                                      ? "Registrar entrada"
+                                      : "Registrar saída"}
                             </button>
                         </div>
                     </form>

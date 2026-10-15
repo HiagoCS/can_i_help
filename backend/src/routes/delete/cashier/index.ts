@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
 const { sqlite } = require("../../../db/index");
-const { recordProductMovement } = require("../../../db/product_stock");
 const fs = require("node:fs");
 
 async function cashier(fastify: FastifyInstance) {
@@ -34,7 +33,7 @@ async function cashier(fastify: FastifyInstance) {
             let transactionOpen = false;
 
             try {
-                // Impede alterações concorrentes no estoque durante a exclusão.
+                // Mantém a exclusão e a correção do estoque atômicas.
                 sqlite.exec("BEGIN IMMEDIATE");
                 transactionOpen = true;
 
@@ -117,8 +116,8 @@ async function cashier(fastify: FastifyInstance) {
                 // ------------------------------------------------
                 // 3. RECUPERAR A SAÍDA ORIGINAL PELO HISTÓRICO
                 // ------------------------------------------------
-                // Quando existem movimentos de venda vinculados à venda,
-                // restauramos as quantidades registradas naquele momento.
+                // Lemos os movimentos antes de apagá-los, pois podem conter
+                // as quantidades reais retiradas durante a venda.
 
                 const saleMovements = sqlite
                     .prepare(`
@@ -212,8 +211,11 @@ async function cashier(fastify: FastifyInstance) {
                 }
 
                 // ------------------------------------------------
-                // 4. RESTAURAR ESTOQUE E REGISTRAR MOVIMENTAÇÃO
+                // 4. RESTAURAR O ESTOQUE ATUAL
                 // ------------------------------------------------
+                // A exclusão corrige products.amount diretamente. Não criamos
+                // outro registro stock_add, pois o histórico da venda será
+                // removido abaixo junto com a venda.
 
                 const getProduct = sqlite.prepare(`
                     SELECT
@@ -261,11 +263,6 @@ async function cashier(fastify: FastifyInstance) {
                         );
                     }
 
-                    recordProductMovement(product, "stock_add", quantity, 0, {
-                        referenceId: saleId,
-                        notes: `Restauração de estoque pela exclusão da venda ${saleId}.`
-                    });
-
                     const updateResult = updateProductStock.run(
                         quantity,
                         productId
@@ -287,9 +284,7 @@ async function cashier(fastify: FastifyInstance) {
                 // ------------------------------------------------
                 // 5. REMOVER DOCUMENTOS INTERNOS DA VENDA
                 // ------------------------------------------------
-                // O PDF A4 e o cupom interno não dependem de documentos fiscais.
-                // Removemos os registros internos associados a esta venda;
-                // os arquivos físicos serão apagados após o COMMIT.
+                // Os arquivos físicos serão apagados após o COMMIT.
 
                 const internalDocuments = sqlite
                     .prepare(`
@@ -310,13 +305,24 @@ async function cashier(fastify: FastifyInstance) {
                     .run(saleId);
 
                 // ------------------------------------------------
-                // 6. REMOVER OS ITENS DA VENDA
+                // 6. REMOVER ITENS E MOVIMENTAÇÕES DA VENDA
                 // ------------------------------------------------
 
                 sqlite
                     .prepare(`
                         DELETE FROM stock_sale
                         WHERE sale_id = ?
+                    `)
+                    .run(saleId);
+
+                // Exclui somente as movimentações de saída geradas pela venda.
+                // O estoque já foi corrigido acima; não reverte estas linhas
+                // através da rota DELETE /update-stock, para evitar dupla correção.
+                const deletedStockMovements = sqlite
+                    .prepare(`
+                        DELETE FROM update_stock
+                        WHERE reference_id = ?
+                          AND movement_type = 'sale'
                     `)
                     .run(saleId);
 
@@ -389,6 +395,7 @@ async function cashier(fastify: FastifyInstance) {
                         saleId,
                         totalValue: sale.total_value,
                         restoredStock: restoredItems,
+                        removedStockMovements: Number(deletedStockMovements.changes),
                         removedInternalDocuments: internalDocuments.length,
                         removedFiles: removedFiles.length
                     }

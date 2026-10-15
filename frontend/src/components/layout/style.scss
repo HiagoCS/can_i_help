@@ -3,7 +3,13 @@
 
     display: flex;
 
-    background: #ffffff;
+    background:
+        linear-gradient(
+            108deg,
+            #ff9915 0%,
+            #d1a15d 53%,
+            #6eafd5 100%
+        );
 }
 
 .system-layout__main {
