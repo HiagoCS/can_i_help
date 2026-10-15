@@ -3,10 +3,78 @@ import {
     getRoles,
     getSystemConfig,
     saveSystemConfig,
+    getInstallments,
+    createInstallment,
+    updateInstallment,
+    deleteInstallment,
     downloadSystemDatabase,
     importSystemDatabase
 } from "@/data/api/settings";
 import { SettingsSectionHeading } from "./common";
+
+function formatInstallmentPercentage(rawValue) {
+    const value = Number(rawValue);
+
+    if (!Number.isFinite(value)) {
+        return "0%";
+    }
+
+    return `${(value * 100).toLocaleString("pt-BR", {
+        maximumFractionDigits: 4
+    })}%`;
+}
+
+/**
+ * Recebe uma porcentagem apresentada ao usuário (por exemplo, "10%" ou
+ * "10,5%") e converte para a fração decimal usada pelo backend (0.1 / 0.105).
+ */
+function parseInstallmentPercentage(formattedValue) {
+    const normalized = String(formattedValue ?? "")
+        .trim()
+        .replace(/\s/g, "")
+        .replace(/%/g, "")
+        .replace(",", ".");
+
+    if (!normalized) {
+        return null;
+    }
+
+    const percentage = Number(normalized);
+
+    if (!Number.isFinite(percentage) || percentage < 0) {
+        return null;
+    }
+
+    return percentage / 100;
+}
+
+function normalizeInstallmentPercentageInput(value) {
+    const text = String(value ?? "").trim();
+
+    if (!text) {
+        return "";
+    }
+
+    const normalized = text
+        .replace(/\s/g, "")
+        .replace(/%/g, "")
+        .replace(",", ".");
+    const number = Number(normalized);
+
+    if (!Number.isFinite(number) || number < 0) {
+        return text;
+    }
+
+    return `${number.toLocaleString("pt-BR", {
+        maximumFractionDigits: 4
+    })}%`;
+}
+
+function sortInstallments(items) {
+    return [...(Array.isArray(items) ? items : [])].sort(
+        (a, b) => Number(a.in_installments) - Number(b.in_installments)
+    );
+}
 
 export default function SystemSection() {
     const [pixKey, setPixKey] = useState("");
@@ -14,6 +82,12 @@ export default function SystemSection() {
     const [selectedRoleIds, setSelectedRoleIds] = useState([]);
     const [roleName, setRoleName] = useState("");
     const [roleLevel, setRoleLevel] = useState("1");
+
+    const [installments, setInstallments] = useState([]);
+    const [installmentCountDraft, setInstallmentCountDraft] = useState("");
+    const [installmentPercentageDraft, setInstallmentPercentageDraft] = useState("");
+    const [editingInstallmentId, setEditingInstallmentId] = useState(null);
+    const [savingInstallments, setSavingInstallments] = useState(false);
 
     const [unitMeasure, setUnitMeasure] = useState({
         unity: "",
@@ -39,9 +113,10 @@ export default function SystemSection() {
         setError("");
 
         try {
-            const [configResult, rolesResult] = await Promise.all([
+            const [configResult, rolesResult, installmentsResult] = await Promise.all([
                 getSystemConfig(),
-                getRoles()
+                getRoles(),
+                getInstallments()
             ]);
 
             const config = Array.isArray(configResult)
@@ -61,6 +136,7 @@ export default function SystemSection() {
                     role.status === true ||
                     role.status === 1
             ));
+            setInstallments(sortInstallments(installmentsResult));
         } catch (reason) {
             setError(
                 reason instanceof Error
@@ -79,6 +155,11 @@ export default function SystemSection() {
     function showSuccess(message) {
         setError("");
         setSuccess(message);
+    }
+
+    async function refreshInstallments() {
+        const result = await getInstallments();
+        setInstallments(sortInstallments(result));
     }
 
     async function savePixKey(event) {
@@ -212,6 +293,109 @@ export default function SystemSection() {
         }
     }
 
+    function startEditInstallment(installment) {
+        setEditingInstallmentId(installment.id);
+        setInstallmentCountDraft(String(installment.in_installments));
+        setInstallmentPercentageDraft(
+            formatInstallmentPercentage(installment.percentage)
+        );
+        setError("");
+        setSuccess("");
+    }
+
+    function resetInstallmentForm() {
+        setEditingInstallmentId(null);
+        setInstallmentCountDraft("");
+        setInstallmentPercentageDraft("");
+    }
+
+    async function saveInstallment(event) {
+        event.preventDefault();
+
+        const inInstallments = Number(installmentCountDraft);
+        const percentage = parseInstallmentPercentage(installmentPercentageDraft);
+
+        if (
+            !Number.isSafeInteger(inInstallments) ||
+            inInstallments <= 0
+        ) {
+            setError("Informe uma quantidade de parcelas inteira e maior que zero.");
+            return;
+        }
+
+        if (percentage === null) {
+            setError("Informe uma porcentagem válida, por exemplo, 10% ou 10,5%.");
+            return;
+        }
+
+        setSavingInstallments(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            if (editingInstallmentId !== null) {
+                await updateInstallment(editingInstallmentId, {
+                    in_installments: inInstallments,
+                    percentage
+                });
+                await refreshInstallments();
+                resetInstallmentForm();
+                showSuccess("Parcelamento atualizado com sucesso.");
+            } else {
+                await createInstallment({
+                    in_installments: inInstallments,
+                    percentage
+                });
+                await refreshInstallments();
+                resetInstallmentForm();
+                showSuccess("Parcelamento adicionado com sucesso.");
+            }
+        } catch (reason) {
+            setError(
+                reason instanceof Error
+                    ? reason.message
+                    : editingInstallmentId !== null
+                        ? "Não foi possível atualizar o parcelamento."
+                        : "Não foi possível adicionar o parcelamento."
+            );
+        } finally {
+            setSavingInstallments(false);
+        }
+    }
+
+    async function removeInstallment(installment) {
+        const confirmed = window.confirm(
+            `Deseja remover a opção de parcelamento x${installment.in_installments} (${formatInstallmentPercentage(installment.percentage)})?`
+        );
+
+        if (!confirmed) return;
+
+        setSavingInstallments(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            await deleteInstallment(installment.id);
+            setInstallments((current) =>
+                current.filter((item) => item.id !== installment.id)
+            );
+
+            if (editingInstallmentId === installment.id) {
+                resetInstallmentForm();
+            }
+
+            showSuccess("Parcelamento removido com sucesso.");
+        } catch (reason) {
+            setError(
+                reason instanceof Error
+                    ? reason.message
+                    : "Não foi possível remover o parcelamento."
+            );
+        } finally {
+            setSavingInstallments(false);
+        }
+    }
+
     async function saveUnitMeasure(event) {
         event.preventDefault();
 
@@ -259,7 +443,6 @@ export default function SystemSection() {
 
         try {
             await downloadSystemDatabase();
-
             showSuccess(
                 "O download do backup do banco de dados foi iniciado."
             );
@@ -575,6 +758,70 @@ export default function SystemSection() {
                     line-height: 1.5;
                 }
 
+                .system-section__installments {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 9px;
+                    margin: 0;
+                    padding: 0;
+                    list-style: none;
+                }
+
+                .system-section__installment {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 14px;
+                    min-width: 0;
+                    padding: 13px 14px;
+                    border: 1px solid var(--settings-border, #dedede);
+                    border-radius: 8px;
+                }
+
+                .system-section__installment-info {
+                    display: flex;
+                    align-items: baseline;
+                    flex-wrap: wrap;
+                    gap: 6px 14px;
+                    min-width: 0;
+                }
+
+                .system-section__installment-count {
+                    font-size: 1rem;
+                    font-weight: 700;
+                    white-space: nowrap;
+                }
+
+                .system-section__installment-percentage {
+                    color: var(--settings-muted, #687078);
+                    font-size: 0.9rem;
+                    white-space: nowrap;
+                }
+
+                .system-section__installment-actions {
+                    display: flex;
+                    flex: 0 0 auto;
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                    gap: 8px;
+                }
+
+                .system-section__installment-actions .system-section__button {
+                    min-height: 36px;
+                    padding: 8px 11px;
+                }
+
+                .system-section__installment-form {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    gap: 12px;
+                    margin-top: 20px;
+                }
+
+                .system-section__installment-form .system-section__actions {
+                    grid-column: 1 / -1;
+                }
+
                 .system-section__database-file {
                     display: block;
                     width: 100%;
@@ -650,6 +897,28 @@ export default function SystemSection() {
                         grid-column: auto;
                     }
 
+                    .system-section__installment {
+                        align-items: flex-start;
+                        flex-direction: column;
+                    }
+
+                    .system-section__installment-actions {
+                        width: 100%;
+                        justify-content: flex-start;
+                    }
+
+                    .system-section__installment-actions .system-section__button {
+                        flex: 1 1 auto;
+                    }
+
+                    .system-section__installment-form {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+
+                    .system-section__installment-form .system-section__actions {
+                        grid-column: auto;
+                    }
+
                     .system-section__actions {
                         display: grid;
                         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -678,7 +947,7 @@ export default function SystemSection() {
 
             <SettingsSectionHeading
                 title="Funcionamento do sistema"
-                description="Gerencie a chave PIX, os perfis de acesso e a unidade de medida."
+                description="Gerencie a chave PIX, as opções de parcelamento, os perfis de acesso e a unidade de medida."
             />
 
             {error && (
@@ -746,6 +1015,208 @@ export default function SystemSection() {
                                     {savingPix
                                         ? "Salvando..."
                                         : "Salvar chave PIX"}
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+
+                    {/* FORMAS DE PARCELAMENTO */}
+                    <section className="system-section__card">
+                        <h3>Formas de parcelamento</h3>
+
+                        <p className="system-section__description">
+                            Cadastre as quantidades de parcelas e o acréscimo percentual aplicado.
+                            O percentual é exibido e informado no formato percentual, como 10%.
+                        </p>
+
+                        {installments.length > 0 ? (
+                            <ul className="system-section__installments">
+                                {installments.map((installment) => (
+                                    <li
+                                        className="system-section__installment"
+                                        key={installment.id}
+                                    >
+                                        <div className="system-section__installment-info">
+                                            <span className="system-section__installment-count">
+                                                x{installment.in_installments}
+                                            </span>
+                                            <span className="system-section__installment-percentage">
+                                                {formatInstallmentPercentage(installment.percentage)} de acréscimo
+                                            </span>
+                                        </div>
+
+                                        <div className="system-section__installment-actions">
+                                            <button
+                                                className="system-section__button system-section__button--secondary"
+                                                type="button"
+                                                onClick={() => startEditInstallment(installment)}
+                                                disabled={savingInstallments}
+                                            >
+                                                Editar
+                                            </button>
+                                            <button
+                                                className="system-section__button system-section__button--danger"
+                                                type="button"
+                                                onClick={() => void removeInstallment(installment)}
+                                                disabled={savingInstallments}
+                                            >
+                                                Remover
+                                            </button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="system-section__empty">
+                                Nenhuma forma de parcelamento cadastrada.
+                            </p>
+                        )}
+
+                        <form
+                            className="system-section__installment-form"
+                            onSubmit={saveInstallment}
+                        >
+                            <div className="system-section__form">
+                                <label
+                                    className="system-section__label"
+                                    htmlFor="system-installment-count"
+                                >
+                                    Quantidade de parcelas
+                                </label>
+                                <input
+                                    id="system-installment-count"
+                                    className="system-section__input"
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    inputMode="numeric"
+                                    placeholder="Ex.: 12"
+                                    value={installmentCountDraft}
+                                    onChange={(event) => setInstallmentCountDraft(event.target.value)}
+                                    required
+                                    disabled={savingInstallments}
+                                />
+                            </div>
+
+                            <div className="system-section__form">
+                                <label
+                                    className="system-section__label"
+                                    htmlFor="system-installment-percentage"
+                                >
+                                    Acréscimo percentual
+                                </label>
+                                <input
+                                    id="system-installment-percentage"
+                                    className="system-section__input"
+                                    type="text"
+                                    inputMode="decimal"
+                                    autoComplete="off"
+                                    placeholder="Ex.: 10% ou 10,5%"
+                                    value={installmentPercentageDraft}
+                                    onChange={(event) => setInstallmentPercentageDraft(event.target.value)}
+                                    onBlur={() => setInstallmentPercentageDraft((value) => normalizeInstallmentPercentageInput(value))}
+                                    required
+                                    disabled={savingInstallments}
+                                />
+                            </div>
+
+                            <div className="system-section__actions">
+                                <button
+                                    className="system-section__button"
+                                    type="submit"
+                                    disabled={savingInstallments}
+                                >
+                                    {savingInstallments
+                                        ? "Salvando..."
+                                        : editingInstallmentId !== null
+                                            ? "Salvar alterações"
+                                            : "Adicionar parcelamento"}
+                                </button>
+                                {editingInstallmentId !== null && (
+                                    <button
+                                        className="system-section__button system-section__button--secondary"
+                                        type="button"
+                                        disabled={savingInstallments}
+                                        onClick={resetInstallmentForm}
+                                    >
+                                        Cancelar edição
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+                    </section>
+
+                    {/* UNIDADE DE MEDIDA */}
+                    <section className="system-section__card">
+                        <h3>Unidade de medida</h3>
+
+                        <p className="system-section__description">
+                            Defina a unidade padrão utilizada nos produtos,
+                            como UN, KG, L ou M.
+                        </p>
+
+                        <form
+                            className="system-section__form"
+                            onSubmit={saveUnitMeasure}
+                        >
+                            <label
+                                className="system-section__label"
+                                htmlFor="system-unit-name"
+                            >
+                                Nomenclatura da unidade
+                            </label>
+
+                            <input
+                                id="system-unit-name"
+                                className="system-section__input"
+                                type="text"
+                                placeholder="Ex.: kg"
+                                value={unitMeasure.unity}
+                                onChange={(event) =>
+                                    setUnitMeasure((current) => ({
+                                        ...current,
+                                        unity: event.target.value
+                                    }))
+                                }
+                                maxLength={20}
+                                required
+                                disabled={savingUnit}
+                            />
+
+                            <label
+                                className="system-section__label"
+                                htmlFor="system-unit-description"
+                            >
+                                Descrição
+                            </label>
+
+                            <textarea
+                                id="system-unit-description"
+                                className="system-section__textarea"
+                                placeholder="Ex.: Quilogramas"
+                                value={unitMeasure.description ?? ""}
+                                onChange={(event) =>
+                                    setUnitMeasure((current) => ({
+                                        ...current,
+                                        description: event.target.value
+                                    }))
+                                }
+                                maxLength={500}
+                                disabled={savingUnit}
+                            />
+
+                            <div className="system-section__actions">
+                                <button
+                                    className="system-section__button"
+                                    type="submit"
+                                    disabled={
+                                        savingUnit ||
+                                        !unitMeasure.unity.trim()
+                                    }
+                                >
+                                    {savingUnit
+                                        ? "Salvando..."
+                                        : "Salvar unidade"}
                                 </button>
                             </div>
                         </form>
@@ -877,82 +1348,6 @@ export default function SystemSection() {
                                     {savingRoles
                                         ? "Salvando..."
                                         : "Adicionar perfil"}
-                                </button>
-                            </div>
-                        </form>
-                    </section>
-
-                    {/* UNIDADE DE MEDIDA */}
-                    <section className="system-section__card">
-                        <h3>Unidade de medida</h3>
-
-                        <p className="system-section__description">
-                            Defina a unidade padrão utilizada nos produtos,
-                            como UN, KG, L ou M.
-                        </p>
-
-                        <form
-                            className="system-section__form"
-                            onSubmit={saveUnitMeasure}
-                        >
-                            <label
-                                className="system-section__label"
-                                htmlFor="system-unit-name"
-                            >
-                                Nomenclatura da unidade
-                            </label>
-
-                            <input
-                                id="system-unit-name"
-                                className="system-section__input"
-                                type="text"
-                                placeholder="Ex.: kg"
-                                value={unitMeasure.unity}
-                                onChange={(event) =>
-                                    setUnitMeasure((current) => ({
-                                        ...current,
-                                        unity: event.target.value
-                                    }))
-                                }
-                                maxLength={20}
-                                required
-                                disabled={savingUnit}
-                            />
-
-                            <label
-                                className="system-section__label"
-                                htmlFor="system-unit-description"
-                            >
-                                Descrição
-                            </label>
-
-                            <textarea
-                                id="system-unit-description"
-                                className="system-section__textarea"
-                                placeholder="Ex.: Quilogramas"
-                                value={unitMeasure.description ?? ""}
-                                onChange={(event) =>
-                                    setUnitMeasure((current) => ({
-                                        ...current,
-                                        description: event.target.value
-                                    }))
-                                }
-                                maxLength={500}
-                                disabled={savingUnit}
-                            />
-
-                            <div className="system-section__actions">
-                                <button
-                                    className="system-section__button"
-                                    type="submit"
-                                    disabled={
-                                        savingUnit ||
-                                        !unitMeasure.unity.trim()
-                                    }
-                                >
-                                    {savingUnit
-                                        ? "Salvando..."
-                                        : "Salvar unidade"}
                                 </button>
                             </div>
                         </form>

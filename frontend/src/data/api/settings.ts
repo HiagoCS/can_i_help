@@ -108,6 +108,123 @@ export type SystemConfigSaveItem =
     };
 
 /* -------------------------------------------------------------------------- */
+/* Parcelamentos                                                              */
+/* Rotas: GET /installments, POST /installment/new,                           */
+/* PUT /installment/:id e DELETE /installment/:id                             */
+/* -------------------------------------------------------------------------- */
+
+export interface SettingsInstallment {
+    id: number;
+    in_installments: number;
+    percentage: number;
+}
+
+export interface SettingsInstallmentCreateInput {
+    in_installments: number;
+    percentage: number;
+}
+
+export interface SettingsInstallmentUpdateInput {
+    in_installments?: number;
+    percentage?: number;
+}
+
+function validateInstallmentId(id: number): number {
+    const installmentId = Number(id);
+
+    if (!Number.isSafeInteger(installmentId) || installmentId <= 0) {
+        throw new Error("Informe um identificador de parcelamento válido.");
+    }
+
+    return installmentId;
+}
+
+/** GET /api/installments */
+export function getInstallments(): Promise<SettingsInstallment[]> {
+    return request<SettingsInstallment[]>("/api/installments", {
+        method: "GET"
+    });
+}
+
+/** POST /api/installment/new */
+export function createInstallment(
+    data: SettingsInstallmentCreateInput
+): Promise<SettingsInstallment> {
+    const installmentsNumber = Number(data?.in_installments);
+    const percentage = Number(data?.percentage);
+
+    if (
+        !Number.isSafeInteger(installmentsNumber) ||
+        installmentsNumber <= 0
+    ) {
+        throw new Error("O número de parcelas deve ser um inteiro positivo.");
+    }
+
+    if (!Number.isFinite(percentage) || percentage < 0) {
+        throw new Error("O percentual deve ser um número válido não negativo.");
+    }
+
+    return request<SettingsInstallment>("/api/installment/new", {
+        method: "POST",
+        body: JSON.stringify({
+            in_installments: installmentsNumber,
+            percentage
+        })
+    });
+}
+
+/** PUT /api/installment/:id — atualiza parcialmente um parcelamento. */
+export function updateInstallment(
+    id: number,
+    data: SettingsInstallmentUpdateInput
+): Promise<SettingsInstallment> {
+    const installmentId = validateInstallmentId(id);
+    const payload: SettingsInstallmentUpdateInput = {};
+
+    if (data.in_installments !== undefined) {
+        const installmentsNumber = Number(data.in_installments);
+
+        if (
+            !Number.isSafeInteger(installmentsNumber) ||
+            installmentsNumber <= 0
+        ) {
+            throw new Error("O número de parcelas deve ser um inteiro positivo.");
+        }
+
+        payload.in_installments = installmentsNumber;
+    }
+
+    if (data.percentage !== undefined) {
+        const percentage = Number(data.percentage);
+
+        if (!Number.isFinite(percentage) || percentage < 0) {
+            throw new Error("O percentual deve ser um número válido não negativo.");
+        }
+
+        payload.percentage = percentage;
+    }
+
+    if (Object.keys(payload).length === 0) {
+        throw new Error("Informe ao menos um campo para atualizar o parcelamento.");
+    }
+
+    return request<SettingsInstallment>(`/api/installment/${installmentId}`, {
+        ...jsonBody(payload)
+    });
+}
+
+/** DELETE /api/installment/:id */
+export function deleteInstallment(
+    id: number
+): Promise<SettingsInstallment> {
+    const installmentId = validateInstallmentId(id);
+
+    return request<SettingsInstallment>(`/api/installment/${installmentId}`, {
+        method: "DELETE"
+    });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Configuração inicial do sistema                                            */
 /* -------------------------------------------------------------------------- */
 
