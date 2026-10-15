@@ -6,6 +6,7 @@ const services = require("./services/index");
 const paymentMethods = require("./payment_methods/index");
 const installments = require("./installments/index");
 const cashier = require("./cashier/index");
+const budget = require("./budget/index");
 const clients = require("./clients/index");
 const settings = require("./settings/index");
 async function post(fastify: FastifyInstance) {
@@ -16,6 +17,7 @@ async function post(fastify: FastifyInstance) {
     await paymentMethods(fastify);
     await installments(fastify);
     await cashier(fastify);
+    await budget(fastify);
     await clients(fastify);
     await settings(fastify);
     fastify.post("/", async () => {

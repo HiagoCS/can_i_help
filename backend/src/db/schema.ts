@@ -43,7 +43,7 @@ const rolesTable = sqliteTable("roles", {
 
 // ============================================================
 // USER ROLES
-// Nome físico da tabela: user_roles
+// Nome físico da tabela: roles_user
 // ============================================================
 
 const rolesUserTable = sqliteTable("roles_user", {
@@ -298,6 +298,23 @@ const cashierTable = sqliteTable("cashier", {
 });
 
 // ============================================================
+// CASHIER / SALES
+// ============================================================
+
+const budgetTable = sqliteTable("budget", {
+    id: integer("id").primaryKey(),
+
+    totalValue: real("total_value")
+        .notNull(),
+
+    clientId: integer("client_id")
+        .references(() => clientsTable.id),
+
+    dtBudget: text("dt_budget")
+        .notNull()
+});
+
+// ============================================================
 // SERVICES
 // A coluna cost mantém o nome usado pelo sistema atual.
 // ============================================================
@@ -356,6 +373,33 @@ const stockSaleTable = sqliteTable("stock_sale", {
     saleId: integer("sale_id")
         .notNull()
         .references(() => cashierTable.id),
+
+    productId: integer("product_id")
+        .references(() => productsTable.id),
+
+    serviceId: integer("service_id")
+        .references(() => servicesTable.id),
+
+    quntSale: integer("qunt_sale")
+        .notNull(),
+
+    unitMeasure: text("unit_measure")
+        .notNull()
+        .default("UN")
+});
+
+// ============================================================
+// STOCK SALE / SALE ITEMS
+// ============================================================
+
+const stockBudgetTable = sqliteTable("stock_budget", {
+    id: integer("id").primaryKey(),
+
+    value: text("value"),
+
+    budgetId: integer("budget_id")
+        .notNull()
+        .references(() => budgetTable.id),
 
     productId: integer("product_id")
         .references(() => productsTable.id),
@@ -652,9 +696,11 @@ module.exports = {
     clientsTable,
 
     cashierTable,
+    budgetTable,
     servicesTable,
     stockServiceTable,
     stockSaleTable,
+    stockBudgetTable,
 
     fiscalInvoiceTable,
     fiscalInvoiceItemsTable,

@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.3",
-    "eightcs_profile": "file:..",
+    "can_i_help": "file:..",
     "gpix": "^1.1.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

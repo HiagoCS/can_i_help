@@ -10,6 +10,7 @@ import {
 import HomePage from "@/components/folders/home";
 import SystemLayout from "@/components/layout";
 import CashierPage from "@/components/folders/cashier";
+import BudgetPage from "@/components/folders/budget";
 import ProductOverviewPage from "@/components/folders/product_overview";
 import ServicesOverviewPage from "@/components/folders/services_overview";
 import ClientsOverviewPage from "@/components/folders/clients_overview";
@@ -229,6 +230,11 @@ function App() {
                     <Route
                         path="caixa"
                         element={<CashierPage />}
+                    />
+
+                    <Route
+                        path="caixa/orcamento"
+                        element={<BudgetPage />}
                     />
 
                     <Route

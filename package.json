@@ -1,14 +1,14 @@
 {
-  "name": "eightcs_profile",
+  "name": "can_i_help",
   "version": "1.0.0",
   "description": "run frontend and backend",
-  "homepage": "https://github.com/HiagoCS/eightcs#readme",
+  "homepage": "https://github.com/HiagoCS/can_i_help#readme",
   "bugs": {
-    "url": "https://github.com/HiagoCS/eightcs/issues"
+    "url": "https://github.com/HiagoCS/can_i_help/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HiagoCS/eightcs.git"
+    "url": "git+https://github.com/HiagoCS/can_i_help.git"
   },
   "license": "ISC",
   "author": "HiagoCS",

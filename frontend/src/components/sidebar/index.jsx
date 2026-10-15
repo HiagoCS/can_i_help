@@ -8,7 +8,8 @@ const menuSections = [
     {
         title: "Módulos",
         items: [
-            { label: "Caixa", path: "/caixa", icon: "register" }
+            { label: "Caixa", path: "/caixa", icon: "register", end: true },
+            { label: "Orçamento", path: "/caixa/orcamento", icon: "budget" }
         ]
     },
     {
@@ -42,6 +43,13 @@ const roleLabels = {
 };
 
 const menuIcons = {
+    budget: (
+        <>
+            <path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" />
+            <path d="M14 2v6h6M8 13h8M8 17h3" />
+            <path d="M15 16.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5-.7 1.5-1.5 1.5-1.5.7-1.5 1.5.7 1.5 1.5 1.5" />
+        </>
+    ),
     register: (
         <>
             <path d="M5 8h14l2 4v3H3v-3l2-4Z" />
@@ -194,6 +202,7 @@ export default function Sidebar({
                                 <li className="sidebar__item" key={item.path}>
                                     <NavLink
                                         to={item.path}
+                                        end={item.end}
                                         className={({ isActive }) => [
                                             "sidebar__link",
                                             isActive ? "is-active" : ""
