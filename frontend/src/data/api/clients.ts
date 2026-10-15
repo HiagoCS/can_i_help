@@ -22,6 +22,17 @@ export interface ClientRecord {
 }
 
 // ============================================================
+// CLIENT DELETE RESULT
+// ============================================================
+
+export interface ClientDeleteResult {
+    clientId: number;
+    clientName: string;
+    detachedSales: number;
+    detachedBudgets: number;
+}
+
+// ============================================================
 // CLIENT LIST SEARCH
 // ============================================================
 
@@ -87,12 +98,12 @@ export interface ClientReportRange {
 
 const env = (import.meta as AppImportMeta).env;
 
-function url(path: string) {
-    return (
-        (env.DEV
-            ? ""
-            : (env.VITE_API_URL ?? "").replace(/\/+$/, "")) + path
-    );
+function url(path: string): string {
+    const base = env.DEV
+        ? ""
+        : (env.VITE_API_URL ?? "").replace(/\/+$/, "");
+
+    return base + path;
 }
 
 // ============================================================
@@ -105,19 +116,23 @@ async function requestData<T>(
 ): Promise<T> {
     let response: Response;
 
+    // Não enviar Content-Type: application/json em requisições sem corpo.
+    // Fastify rejeita DELETE/GET sem body quando esse cabeçalho está presente.
+    const headers = new Headers(options.headers);
+    headers.set("Accept", headers.get("Accept") ?? "application/json");
+
+    if (options.body != null && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+
     try {
         response = await fetch(url(path), {
             ...options,
             credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-                ...options.headers
-            }
+            headers
         });
     } catch {
-        throw new Error(
-            "Não foi possível conectar ao servidor."
-        );
+        throw new Error("Não foi possível conectar ao servidor.");
     }
 
     const result = await response
@@ -131,16 +146,19 @@ async function requestData<T>(
             );
         }
 
+        if (response.status === 403) {
+            throw new Error(
+                result?.message ?? "Você não tem permissão para realizar esta operação."
+            );
+        }
+
         throw new Error(
-            result?.message ??
-            "Não foi possível concluir a operação."
+            result?.message ?? "Não foi possível concluir a operação."
         );
     }
 
     if (result?.data == null) {
-        throw new Error(
-            "O servidor retornou uma resposta inválida."
-        );
+        throw new Error("O servidor retornou uma resposta inválida.");
     }
 
     return result.data;
@@ -167,6 +185,34 @@ export function getClients(
     return requestData<ClientRecord[]>(
         "/api/clients" + (suffix ? "?" + suffix : ""),
         signal !== undefined ? { signal } : {}
+    );
+}
+
+// ============================================================
+// DELETE CLIENT
+// DELETE /api/clients/:clientId
+// Remove o cliente e desvincula suas vendas e orçamentos.
+// ============================================================
+
+export function deleteClient(
+    clientId: number,
+    signal?: AbortSignal
+): Promise<ClientDeleteResult> {
+    if (!Number.isSafeInteger(clientId) || clientId <= 0) {
+        return Promise.reject(
+            new Error("O identificador do cliente é inválido.")
+        );
+    }
+
+    return requestData<ClientDeleteResult>(
+        "/api/clients/" + clientId,
+        {
+            method: "DELETE",
+            headers: {
+                Accept: "application/json"
+            },
+            ...(signal ? { signal } : {})
+        }
     );
 }
 

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     getClients,
-    getClientReports
+    getClientReports,
+    deleteClient
 } from "@/data/api/clients";
 import ColumnFilter from "@/components/column_filter";
 import "./style.scss";
@@ -123,6 +124,7 @@ export default function ClientsOverviewPage() {
 
     const [loading, setLoading] = useState(true);
     const [reportsLoading, setReportsLoading] = useState(true);
+    const [deleting, setDeleting] = useState(false);
 
     const [error, setError] = useState("");
     const [reportsError, setReportsError] = useState("");
@@ -280,10 +282,55 @@ export default function ClientsOverviewPage() {
         setError("");
     }
 
+    async function handleDeleteClient() {
+        if (!selected || deleting) return;
+
+        const clientId = Number(selected.id);
+        const clientName = selected.name || `#${clientId}`;
+        const confirmed = window.confirm(
+            `Deseja realmente excluir o cliente "${clientName}"?\n\n` +
+            "As vendas e os orçamentos serão preservados, mas ficarão sem vínculo com este cliente."
+        );
+
+        if (!confirmed) return;
+
+        setDeleting(true);
+        setError("");
+
+        try {
+            const result = await deleteClient(clientId);
+
+            setClients((current) =>
+                current.filter((client) => Number(client.id) !== clientId)
+            );
+            setReports((current) =>
+                current.filter((report) => Number(report.id) !== clientId)
+            );
+            setSelectedId(null);
+
+            const detachedSales = Number(result?.detachedSales) || 0;
+            const detachedBudgets = Number(result?.detachedBudgets) || 0;
+
+            window.alert(
+                `Cliente "${result?.clientName || clientName}" excluído com sucesso.\n\n` +
+                `Vendas preservadas e desvinculadas: ${detachedSales}\n` +
+                `Orçamentos preservados e desvinculados: ${detachedBudgets}`
+            );
+        } catch (reason) {
+            setError(
+                reason instanceof Error
+                    ? reason.message
+                    : "Não foi possível excluir o cliente."
+            );
+        } finally {
+            setDeleting(false);
+        }
+    }
+
     return (
         <main className="clients-overview">
             <header className="clients-overview__header">
-                <h1 onClick={() =>{window.location.href="/"}} >POSSO AJUDAR?</h1>
+                <h1 onClick={() => { window.location.href = "/" }}>POSSO AJUDAR?</h1>
                 <span>Clientes - Geral</span>
             </header>
 
@@ -397,8 +444,7 @@ export default function ClientsOverviewPage() {
                                             }
                                             className={[
                                                 "clients-overview__row",
-                                                Number(selectedId) ===
-                                                    Number(client.id)
+                                                Number(selectedId) === Number(client.id)
                                                     ? "is-selected"
                                                     : ""
                                             ]
@@ -416,9 +462,7 @@ export default function ClientsOverviewPage() {
                                             }}
                                         >
                                             <td>
-                                                {page * overviewPageSize +
-                                                    index +
-                                                    1}
+                                                {page * overviewPageSize + index + 1}
                                             </td>
 
                                             {columnVisibility.id && (
@@ -465,9 +509,7 @@ export default function ClientsOverviewPage() {
                                 aria-label="Página anterior"
                                 disabled={page === 0 || loading}
                                 onClick={() =>
-                                    setPage((current) =>
-                                        Math.max(0, current - 1)
-                                    )
+                                    setPage((current) => Math.max(0, current - 1))
                                 }
                             >
                                 &lt;
@@ -505,19 +547,37 @@ export default function ClientsOverviewPage() {
 
                                 <div className="clients-overview__document">
                                     <span>CNPJ</span>
-                                    <strong>
-                                        {selected.cnpj || "Não informado"}
-                                    </strong>
+                                    <strong>{selected.cnpj || "Não informado"}</strong>
                                 </div>
 
-                                <div className="clients-overview__personal-footer" style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", alignItems: "center" }}>
-                                    <div className="clients-overview__client-note">
-                                        Cadastro de cliente
+                                <div
+                                    className="clients-overview__personal-footer"
+                                    style={{
+                                        display: "flex",
+                                        gap: "0.5rem",
+                                        justifyContent: "space-between",
+                                        alignItems: "center"
+                                    }}
+                                >
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                        <div className="clients-overview__client-note">
+                                            Cadastro de cliente
+                                        </div>
+                                        <div
+                                            className="clients-overview__client-delete"
+                                            onClick={handleDeleteClient}
+                                            disabled={deleting}
+                                            aria-label={`Excluir cliente ${selected.name}`}
+                                        >
+                                            {deleting ? "Excluindo..." : "Excluir Cliente"}
+                                        </div>
                                     </div>
-                                    <div className="clients-overview__client-edit"
+                                    <div
+                                        className="clients-overview__client-edit"
                                         onClick={() => {
                                             window.location.href = `/clientes/editar/${selected.id}`;
                                         }}
+                                        disabled={deleting}
                                     >
                                         Editar
                                     </div>
@@ -527,8 +587,7 @@ export default function ClientsOverviewPage() {
                             <div className="clients-overview__card-empty">
                                 <strong>Nenhum cliente selecionado</strong>
                                 <span>
-                                    Selecione uma linha da tabela para
-                                    visualizar os dados do cliente.
+                                    Selecione uma linha da tabela para visualizar os dados do cliente.
                                 </span>
                             </div>
                         )}
@@ -549,30 +608,22 @@ export default function ClientsOverviewPage() {
                             <div className="clients-overview__summary-grid">
                                 <div>
                                     <span>Compras</span>
-                                    <strong>
-                                        {qty(selectedTotals.purchaseCount)}
-                                    </strong>
+                                    <strong>{qty(selectedTotals.purchaseCount)}</strong>
                                 </div>
 
                                 <div>
                                     <span>Itens comprados</span>
-                                    <strong>
-                                        {qty(selectedTotals.itemsBought)}
-                                    </strong>
+                                    <strong>{qty(selectedTotals.itemsBought)}</strong>
                                 </div>
 
                                 <div>
                                     <span>Total gasto</span>
-                                    <strong>
-                                        {money(selectedTotals.totalSpent)}
-                                    </strong>
+                                    <strong>{money(selectedTotals.totalSpent)}</strong>
                                 </div>
 
                                 <div>
                                     <span>Ticket médio</span>
-                                    <strong>
-                                        {money(selectedTotals.averageTicket)}
-                                    </strong>
+                                    <strong>{money(selectedTotals.averageTicket)}</strong>
                                 </div>
                             </div>
                         ) : (
@@ -590,9 +641,7 @@ export default function ClientsOverviewPage() {
                             {selectedReport && (
                                 <span>
                                     {purchases.length}{" "}
-                                    {purchases.length === 1
-                                        ? "compra"
-                                        : "compras"}
+                                    {purchases.length === 1 ? "compra" : "compras"}
                                 </span>
                             )}
                         </div>
@@ -623,14 +672,8 @@ export default function ClientsOverviewPage() {
                                     >
                                         <div className="clients-overview__purchase-heading">
                                             <div>
-                                                <strong>
-                                                    Compra #{purchase.id}
-                                                </strong>
-                                                <span>
-                                                    {formatDateTime(
-                                                        purchase.dt_sale
-                                                    )}
-                                                </span>
+                                                <strong>Compra #{purchase.id}</strong>
+                                                <span>{formatDateTime(purchase.dt_sale)}</span>
                                             </div>
 
                                             <strong className="clients-overview__purchase-total">
@@ -639,13 +682,10 @@ export default function ClientsOverviewPage() {
                                         </div>
 
                                         <div className="clients-overview__payment">
-                                            Pagamento:{" "}
-                                            {purchase.payment_method ||
-                                                "Não informado"}
+                                            Pagamento: {purchase.payment_method || "Não informado"}
                                         </div>
 
-                                        {Array.isArray(purchase.items) &&
-                                            purchase.items.length > 0 ? (
+                                        {Array.isArray(purchase.items) && purchase.items.length > 0 ? (
                                             <div className="clients-overview__purchase-items">
                                                 {purchase.items.map((item) => (
                                                     <div
@@ -653,32 +693,15 @@ export default function ClientsOverviewPage() {
                                                         key={item.id}
                                                     >
                                                         <div>
-                                                            <strong>
-                                                                {item.name}
-                                                            </strong>
+                                                            <strong>{item.name}</strong>
                                                             <small>
-                                                                {getItemType(
-                                                                    item.type
-                                                                )}{" "}
-                                                                ·{" "}
-                                                                {qty(item.quantity)}{" "}
-                                                                {item.unit_measure ||
-                                                                    "un."}
+                                                                {getItemType(item.type)} · {qty(item.quantity)} {item.unit_measure || "un."}
                                                             </small>
                                                         </div>
 
                                                         <div>
-                                                            <span>
-                                                                {money(
-                                                                    item.unit_value
-                                                                )}{" "}
-                                                                / un.
-                                                            </span>
-                                                            <strong>
-                                                                {money(
-                                                                    item.total_value
-                                                                )}
-                                                            </strong>
+                                                            <span>{money(item.unit_value)} / un.</span>
+                                                            <strong>{money(item.total_value)}</strong>
                                                         </div>
                                                     </div>
                                                 ))}

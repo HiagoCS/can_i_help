@@ -325,6 +325,19 @@
     font-size: 0.75rem;
     font-weight: 700;
 }
+.clients-overview__client-delete {
+    align-self: flex-start;
+    padding: 0.25rem 0.6rem;
+    border-radius: 1rem;
+    background: #efdbd8;
+    color: #6b1717;
+    font-size: 0.75rem;
+    font-weight: 700;
+    transition: all 0.2s ease-in-out;
+    &:hover{
+       padding: 0.35rem 0.8rem;
+    }
+}
 .clients-overview__client-edit {
     align-self: flex-start;
     padding: 0.35rem 0.8rem;
