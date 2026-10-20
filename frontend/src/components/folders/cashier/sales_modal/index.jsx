@@ -7,8 +7,7 @@ import {
     getCashierSales,
     deleteCashierSale,
     openCashierSalePdf,
-    openCashierFiscalCoupon,
-    openCashierDanfe
+    openCashierFiscalCoupon
 } from "@/data/api/cashier";
 
 import "./style.scss";
@@ -266,14 +265,6 @@ export default function CashierSalesModal({ onClose }) {
                 await openCashierSalePdf(sale.id);
             } else if (documentType === "coupon") {
                 await openCashierFiscalCoupon(sale.id);
-            } else if (documentType === "danfe") {
-                if (!isDanfeAvailable(sale)) {
-                    throw new Error(
-                        "A DANFE só pode ser aberta quando a NF-e estiver autorizada."
-                    );
-                }
-
-                await openCashierDanfe(sale.id);
             }
         } catch (error) {
             setActionError(getErrorMessage(error));

@@ -65,110 +65,10 @@ function removeConnection(userId: number, socket: any) {
     broadcastPresence();
 }
 
-function parseValidityDate(value: string, endOfDay = false) {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-
-    if (!match) return Number.NaN;
-
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-
-    const timestamp = Date.UTC(year, month - 1, day);
-    const parsed = new Date(timestamp);
-
-    if (
-        parsed.getUTCFullYear() !== year ||
-        parsed.getUTCMonth() !== month - 1 ||
-        parsed.getUTCDate() !== day
-    ) {
-        return Number.NaN;
-    }
-
-    return endOfDay
-        ? timestamp + 86_399_999
-        : timestamp;
-}
-
-function isCurrentCertificate(
-    status: number,
-    validFrom: string | null,
-    validUntil: string | null
-) {
-    const now = Date.now();
-
-    const start = validFrom
-        ? parseValidityDate(validFrom)
-        : Number.NaN;
-
-    const end = validUntil
-        ? parseValidityDate(validUntil, true)
-        : Number.NaN;
-
-    return Boolean(
-        status &&
-        Number.isFinite(start) &&
-        Number.isFinite(end) &&
-        start <= now &&
-        end >= now
-    );
-}
-
-function getCertificateMetadata(companyId: number) {
-    const certificate = sqlite.prepare(
-        `SELECT
-            status,
-            valid_from,
-            valid_until,
-            certificate
-         FROM fiscal_certificates
-         WHERE company_id = ?
-         ORDER BY id DESC
-         LIMIT 1`
-    ).get(companyId) as {
-        status: number;
-        valid_from: string | null;
-        valid_until: string | null;
-        certificate: string;
-    } | undefined;
-
-    if (!certificate) {
-        return {
-            exists: false,
-            status: false,
-            valid_from: null,
-            valid_until: null,
-            is_valid: false
-        };
-    }
-
-    return {
-        exists: Boolean(certificate.certificate),
-        status: Boolean(certificate.status),
-        valid_from: certificate.valid_from,
-        valid_until: certificate.valid_until,
-        is_valid: isCurrentCertificate(
-            certificate.status,
-            certificate.valid_from,
-            certificate.valid_until
-        )
-    };
-}
-
 function getCurrentCompany() {
     return sqlite.prepare(
         "SELECT * FROM company ORDER BY id LIMIT 1"
     ).get() as Record<string, any> | undefined;
-}
-
-function getCurrentFiscalConfig(companyId: number) {
-    return sqlite.prepare(
-        `SELECT *
-         FROM fiscal_config
-         WHERE company_id = ?
-         ORDER BY id
-         LIMIT 1`
-    ).get(companyId) as Record<string, any> | undefined;
 }
 
 function getCurrentRoles() {
@@ -188,6 +88,7 @@ function getCurrentUnitMeasure() {
 
 async function settings(fastify: FastifyInstance) {
     const authenticated = [fastify.authenticate];
+
     const critical = [
         fastify.authenticate,
         fastify.authorize(3)
@@ -471,11 +372,12 @@ async function settings(fastify: FastifyInstance) {
             const pixKey = getCurrentCompany()?.["pix_key"];
             const roles = getCurrentRoles();
             const unitMeasure = getCurrentUnitMeasure();
+
             return {
                 message: "Configurações do Sistema carregadas.",
                 data: {
                     pix_key: pixKey ?? null,
-                    roles: roles ?? null,
+                    roles,
                     unit_measure: unitMeasure ?? null
                 }
             };
